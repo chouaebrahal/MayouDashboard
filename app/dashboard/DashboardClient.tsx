@@ -2,6 +2,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { supabase } from "@/lib/supabaseClient"
 import { Patient, Doctor, Admin } from "@/types/db"
 import {
   Users,
