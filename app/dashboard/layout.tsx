@@ -1,49 +1,54 @@
 "use client";
 
-// app/dashboard/layout.tsx (ou app/layout-dashboard.tsx)
+// app/dashboard/layout.tsx
 // Composant Layout principal pour le dashboard médecin
 
 import React, { useState } from 'react';
 import {
   Stethoscope,
   LayoutDashboard,
-  CalendarDays,
   Users,
-  FileText,
-  BarChart3,
   Settings,
   Bell,
-  Search,
   UserCircle2,
   LogOut,
-  Command,
   Activity,
-  Clock,
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
 import Link from 'next/link';
-
-
 import { usePathname } from 'next/navigation';
+import { UserProvider, useUser } from '@/app/components/UserProvider';
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+// ── Inner layout (uses useUser — must be inside UserProvider) ──────────────
+function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
+  const { user, logout, loading } = useUser();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-500 text-sm">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 overflow-hidden font-sans">
-      
+
       {/* ==================== SIDEBAR MODERNE ==================== */}
-      <aside 
+      <aside
         className={`${isCollapsed ? 'w-20' : 'w-72'} bg-white/80 backdrop-blur-xl border-r border-slate-200/60 shadow-xl shadow-slate-200/20 flex flex-col transition-all duration-300 z-20 whitespace-nowrap`}
       >
-        
         {/* Logo + Brand */}
         <div className={`px-6 pt-8 pb-6 border-b border-slate-100 flex items-center ${isCollapsed ? 'justify-center px-2' : ''}`}>
           <div className="flex items-center gap-3">
@@ -53,9 +58,9 @@ export default function DashboardLayout({
             {!isCollapsed && (
               <div className="transition-opacity duration-300 opacity-100">
                 <h1 className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                  MediDash
+                  MayouDashboard
                 </h1>
-                <p className="text-xs text-slate-400 font-medium">Centre Médical</p>
+                <p className="text-xs text-slate-400 font-medium">Les Babors</p>
               </div>
             )}
           </div>
@@ -63,29 +68,24 @@ export default function DashboardLayout({
 
         {/* Navigation principale */}
         <nav className={`flex-1 ${isCollapsed ? 'px-2' : 'px-4'} py-6 space-y-1.5 overflow-hidden`}>
-          <NavItem 
-            icon={<LayoutDashboard size={20} />} 
-            label="Tableau de bord" 
+          <NavItem
+            icon={<LayoutDashboard size={20} />}
+            label="Tableau de bord"
             href="/dashboard"
             active={pathname === '/dashboard'}
             isCollapsed={isCollapsed}
           />
-          <NavItem 
-            icon={<Users size={20} />} 
-            label="Patients" 
+          <NavItem
+            icon={<Users size={20} />}
+            label="Patients"
             href="/dashboard/patients"
             active={pathname.startsWith('/dashboard/patients')}
             isCollapsed={isCollapsed}
           />
-          {/* Les autres liens si vous les remettez
-          <NavItem icon={<CalendarDays size={20} />} label="Rendez-vous" badge="3" isCollapsed={isCollapsed} />
-          <NavItem icon={<FileText size={20} />} label="Dossiers médicaux" isCollapsed={isCollapsed} />
-          <NavItem icon={<BarChart3 size={20} />} label="Statistiques" isCollapsed={isCollapsed} />
-          <NavItem icon={<Activity size={20} />} label="Consultations" isCollapsed={isCollapsed} /> */}
           <div className="pt-4 mt-2 border-t border-slate-100">
-            <NavItem 
-              icon={<Settings size={20} />} 
-              label="Paramètres" 
+            <NavItem
+              icon={<Settings size={20} />}
+              label="Paramètres"
               href="/dashboard/settings"
               active={pathname.startsWith('/dashboard/settings')}
               isCollapsed={isCollapsed}
@@ -93,7 +93,7 @@ export default function DashboardLayout({
           </div>
         </nav>
 
-        {/* Profil médecin */}
+        {/* Profil médecin AVEC DÉCONNEXION */}
         <div className={`p-4 border-t border-slate-100 bg-slate-50/50 m-3 rounded-2xl transition-all duration-300 ${isCollapsed ? 'flex justify-center px-1' : ''}`}>
           <div className="flex items-center gap-3">
             <div className="relative shrink-0">
@@ -105,10 +105,20 @@ export default function DashboardLayout({
             {!isCollapsed && (
               <>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-700 text-sm truncate">Dr. Mayou</p>
-                  <p className="text-xs text-slate-400">Médecin</p>
+                  <p className="font-semibold text-slate-700 text-sm truncate">
+                    {user.role === "doctor" ? "Dr. " : ""}{user.nom} {user.prenom}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {user.role === "admin" ? "Administrateur" : "Médecin"}
+                  </p>
                 </div>
-                <LogOut className="w-4 h-4 text-slate-400 cursor-pointer hover:text-red-500 transition shrink-0" />
+                <button
+                  onClick={logout}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition shrink-0"
+                  title="Déconnexion"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </>
             )}
           </div>
@@ -117,13 +127,13 @@ export default function DashboardLayout({
 
       {/* ==================== MAIN + HEADER ==================== */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        
-        {/* Header moderne avec recherche patient */}
+
+        {/* Header moderne */}
         <header className="bg-white/70 backdrop-blur-md border-b border-slate-200/50 px-8 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm transition-all duration-300">
-          
+
           <div className="flex items-center gap-4">
             {/* Toggle Sidebar Button */}
-            <button 
+            <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="p-2 -ml-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-cyan-600 transition"
               title="Toggle Sidebar"
@@ -133,7 +143,7 @@ export default function DashboardLayout({
             {/* Titre de bienvenue */}
             <div className="flex flex-col">
               <h2 className="text-xl font-semibold text-slate-800 tracking-tight">
-                Bonjour, Dr. Mayou
+                Bonjour, {user.role === "doctor" ? "Dr. " : ""}{user.nom}
               </h2>
               <p className="text-sm text-slate-400 flex items-center gap-1.5 capitalize" suppressHydrationWarning>
                 <Sparkles size={14} className="text-amber-400" />
@@ -144,29 +154,26 @@ export default function DashboardLayout({
 
           {/* Actions Rapides & Statut */}
           <div className="flex items-center gap-5">
-            
+
             {/* Statut Cabinet Live */}
             <div className="hidden md:flex items-center bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
-               <span className="px-3 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-600 rounded-xl flex items-center gap-2">
-                 <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                 </span>
-                 Cabinet ouvert
-               </span>
-               <div className="w-px h-4 bg-slate-200 mx-2" />
-               <span className="px-3 py-1.5 text-xs font-medium text-slate-500 flex items-center gap-1.5 hover:text-slate-700 cursor-pointer transition-colors group">
-                 <Activity size={14} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                 Performances
-               </span>
+              <span className="px-3 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-600 rounded-xl flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                Cabinet ouvert
+              </span>
+              <div className="w-px h-4 bg-slate-200 mx-2" />
+              <span className="px-3 py-1.5 text-xs font-medium text-slate-500 flex items-center gap-1.5 hover:text-slate-700 cursor-pointer transition-colors group">
+                <Activity size={14} className="text-blue-500 group-hover:scale-110 transition-transform" />
+                Performances
+              </span>
             </div>
-
-            {/* Raccourcis Add */}
-          
 
             <div className="w-px h-8 bg-slate-200 hidden md:block"></div>
 
-            {/* Notifications & Settings */}
+            {/* Notifications */}
             <div className="flex items-center gap-2">
               <button className="relative p-2.5 rounded-xl bg-slate-50/80 border border-slate-200 hover:bg-white hover:text-cyan-600 hover:shadow-md transition-all duration-200 group">
                 <Bell size={18} className="text-slate-500 group-hover:text-cyan-600 transition-colors" />
@@ -176,40 +183,47 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        {/* Contenu dynamique (children) */}
+        {/* Contenu dynamique (children) — no extra padding here, each page owns its own */}
         <main className="flex-1 overflow-y-auto custom-scroll">
-          <div className="p-8">
-            {children}
-          </div>
+          {children}
         </main>
       </div>
     </div>
   );
 }
 
-// Composant NavItem réutilisable
-function NavItem({ 
-  icon, 
-  label, 
-  active = false, 
-  badge, 
-  href, 
-  isCollapsed 
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  active?: boolean; 
-  badge?: string; 
+// ── Outer layout — provides UserProvider scoped to /dashboard/* only ────────
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <UserProvider>
+      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+    </UserProvider>
+  );
+}
+
+// ── NavItem ──────────────────────────────────────────────────────────────────
+function NavItem({
+  icon,
+  label,
+  active = false,
+  badge,
+  href,
+  isCollapsed,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  badge?: string;
   href?: string;
   isCollapsed?: boolean;
 }) {
   const content = (
-    <button
+    <div
       title={isCollapsed ? label : undefined}
       className={`
-        w-full flex items-center px-4 py-2.5 rounded-xl transition-all duration-300 ease-in-out group
-        ${active 
-          ? 'bg-cyan-50 text-cyan-700 shadow-sm border border-cyan-200/60' 
+        w-full flex items-center px-4 py-2.5 rounded-xl transition-all duration-300 ease-in-out group cursor-pointer
+        ${active
+          ? 'bg-cyan-50 text-cyan-700 shadow-sm border border-cyan-200/60'
           : 'bg-transparent border border-transparent text-slate-500 hover:bg-slate-100/80 hover:text-slate-700'
         }
         ${isCollapsed ? 'justify-center gap-0' : 'gap-3'}
@@ -230,13 +244,12 @@ function NavItem({
           )}
         </>
       )}
-    </button>
+    </div>
   );
 
   if (href) {
-    return <Link href={href} className="block">{content}</Link>;
+    return <Link href={href}>{content}</Link>;
   }
 
   return content;
 }
-
