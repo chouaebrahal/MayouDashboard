@@ -15,7 +15,7 @@ export default async function PatientDetailsPage({ params }: { params: { id: str
     notFound()
   }
 
-  console.log(patient)
+  
 
   return <PatientDetailsClient patient={patient} />
 }
