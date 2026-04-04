@@ -92,6 +92,69 @@ const contactColors: Record<string, string> = {
   "En attente de retour": "bg-orange-700 text-white",
 }
 
+// ── Stable sub-components (defined outside the parent to preserve identity) ──
+
+function InfoRow({ label, value, icon }: { label: string; value: string | null; icon?: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 py-3 border-b border-slate-100">
+      <div className="w-8 text-slate-400">{icon}</div>
+      <div className="flex-1">
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</p>
+        <p className="text-slate-700 font-medium mt-0.5">{value || "—"}</p>
+      </div>
+    </div>
+  )
+}
+
+interface EditFieldProps {
+  label: string
+  name: keyof Patient
+  type?: string
+  options?: string[]
+  formData: Partial<Patient>
+  setFormData: React.Dispatch<React.SetStateAction<Partial<Patient>>>
+}
+
+function EditField({ label, name, type = "text", options, formData, setFormData }: EditFieldProps) {
+  return (
+    <div className="flex flex-col gap-1 py-1">
+      {label && <label className="text-xs font-semibold text-slate-600">{label}</label>}
+      {options ? (
+        <select
+          value={(formData[name] as string | number) || ""}
+          onChange={(e) => setFormData((prev) => ({ ...prev, [name]: e.target.value }))}
+          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm transition-colors"
+        >
+          {options.map((opt: string) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      ) : type === "textarea" ? (
+        <textarea
+          value={(formData[name] as string | number) || ""}
+          onChange={(e) => setFormData((prev) => ({ ...prev, [name]: e.target.value }))}
+          rows={3}
+          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none text-slate-800 font-medium shadow-sm transition-colors"
+        />
+      ) : (
+        <input
+          type={type}
+          value={(formData[name] as string | number) || ""}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              [name]: type === "number" ? parseInt(e.target.value) || null : e.target.value,
+            }))
+          }
+          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm transition-colors"
+        />
+      )}
+    </div>
+  )
+}
+
 export default function PatientDetailsClient({ patient: initialPatient }: PatientDetailsClientProps) {
   const router = useRouter()
   const [patient, setPatient] = useState<Patient>(initialPatient)
@@ -322,48 +385,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
     setLoading(false)
   }
 
-  const InfoRow = ({ label, value, icon }: { label: string; value: string | null; icon?: React.ReactNode }) => (
-    <div className="flex items-start gap-3 py-3 border-b border-slate-100">
-      <div className="w-8 text-slate-400">{icon}</div>
-      <div className="flex-1">
-        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</p>
-        <p className="text-slate-700 font-medium mt-0.5">{value || "—"}</p>
-      </div>
-    </div>
-  )
-
-  const EditField = ({ label, name, type = "text", options }: { label: string; name: keyof Patient; type?: string; options?: string[] }) => (
-    <div className="flex flex-col gap-1 py-1">
-      {label && <label className="text-xs font-semibold text-slate-600">{label}</label>}
-      {options ? (
-        <select
-          value={(formData[name] as string | number) || ""}
-          onChange={(e) => setFormData({ ...formData, [name]: e.target.value })}
-          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm transition-colors"
-        >
-          {options.map((opt: string) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      ) : type === "textarea" ? (
-        <textarea
-          value={(formData[name] as string | number) || ""}
-          onChange={(e) => setFormData({ ...formData, [name]: e.target.value })}
-          rows={3}
-          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none text-slate-800 font-medium shadow-sm transition-colors"
-        />
-      ) : (
-        <input
-          type={type}
-          value={(formData[name] as string | number) || ""}
-          onChange={(e) => setFormData({ ...formData, [name]: type === "number" ? parseInt(e.target.value) || null : e.target.value })}
-          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm transition-colors"
-        />
-      )}
-    </div>
-  )
+  // InfoRow and EditField are defined outside the component (see below)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-100/40">
@@ -452,12 +474,12 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <EditField label="Nom" name="nom" />
-                    <EditField label="Prénom" name="prenom" />
-                    <EditField label="Âge" name="age" type="number" />
-                    <EditField label="Téléphone" name="telephone" />
-                    <EditField label="Date de rendez-vous" name="date" type="date" />
-                    <EditField label="Médecin référant" name="referring_doctor" />
+                    <EditField label="Nom" name="nom" formData={formData} setFormData={setFormData} />
+                    <EditField label="Prénom" name="prenom" formData={formData} setFormData={setFormData} />
+                    <EditField label="Âge" name="age" type="number" formData={formData} setFormData={setFormData} />
+                    <EditField label="Téléphone" name="telephone" formData={formData} setFormData={setFormData} />
+                    <EditField label="Date de rendez-vous" name="date" type="date" formData={formData} setFormData={setFormData} />
+                    <EditField label="Médecin référant" name="referring_doctor" formData={formData} setFormData={setFormData} />
                   </div>
                 )}
               </div>
@@ -482,7 +504,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                     ))}
                   </select>
                 ) : (
-                  <EditField label="" name="type_de_cas" options={TYPE_CAS_OPTIONS} />
+                  <EditField label="" name="type_de_cas" options={TYPE_CAS_OPTIONS} formData={formData} setFormData={setFormData} />
                 )}
               </div>
 
@@ -503,7 +525,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                     ))}
                   </select>
                 ) : (
-                  <EditField label="" name="statut_dossier" options={STATUT_DOSSIER_OPTIONS} />
+                  <EditField label="" name="statut_dossier" options={STATUT_DOSSIER_OPTIONS} formData={formData} setFormData={setFormData} />
                 )}
               </div>
 
@@ -524,7 +546,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                     ))}
                   </select>
                 ) : (
-                  <EditField label="" name="contact" options={CONTACT_STATUS_OPTIONS} />
+                  <EditField label="" name="contact" options={CONTACT_STATUS_OPTIONS} formData={formData} setFormData={setFormData} />
                 )}
               </div>
             </div>
@@ -541,7 +563,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                 {!isEditing ? (
                   <p className="text-slate-600">{patient.pieces_manquantes || "Aucune pièce manquante signalée"}</p>
                 ) : (
-                  <EditField label="" name="pieces_manquantes" type="textarea" />
+                  <EditField label="" name="pieces_manquantes" type="textarea" formData={formData} setFormData={setFormData} />
                 )}
               </div>
             </div>
@@ -558,7 +580,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                 {!isEditing ? (
                   <p className="text-slate-600 whitespace-pre-wrap">{patient.notes || "Aucune note"}</p>
                 ) : (
-                  <EditField label="" name="notes" type="textarea" />
+                  <EditField label="" name="notes" type="textarea" formData={formData} setFormData={setFormData} />
                 )}
               </div>
             </div>
@@ -575,7 +597,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                 {!isEditing ? (
                   <p className="text-slate-600 whitespace-pre-wrap">{patient.resultat || "Aucun résultat enregistré"}</p>
                 ) : (
-                  <EditField label="" name="resultat" type="textarea" />
+                  <EditField label="" name="resultat" type="textarea" formData={formData} setFormData={setFormData} />
                 )}
               </div>
             </div>
@@ -607,7 +629,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                     <p className="text-slate-400">Aucun document lié</p>
                   )
                 ) : (
-                  <EditField label="URL Vidéo / Document" name="video_url" />
+                  <EditField label="URL Vidéo / Document" name="video_url" formData={formData} setFormData={setFormData} />
                 )}
               </div>
             </div>
