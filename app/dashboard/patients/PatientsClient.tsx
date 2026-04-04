@@ -198,7 +198,7 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
 
   // ── Inline status / type / contact changes with optimistic rollback ─────────
   const handleStatusChange = useCallback(async (patientId: string, newStatus: string) => {
-    const prev = patients.find((p) => p.id === patientId)?.statut_dossier
+    const prev = patients.find((p) => p.id === patientId)?.statut_dossier ?? null
     // Optimistic update
     setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, statut_dossier: newStatus } : p))
     setOpenDropdown(null)
@@ -216,7 +216,7 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
   }, [patients])
 
   const handleContactChange = useCallback(async (patientId: string, newContact: string) => {
-    const prev = patients.find((p) => p.id === patientId)?.contact
+    const prev = patients.find((p) => p.id === patientId)?.contact ?? null
     setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, contact: newContact } : p))
     setOpenDropdown(null)
 
@@ -232,7 +232,7 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
   }, [patients])
 
   const handleTypeCasChange = useCallback(async (patientId: string, newType: string) => {
-    const prev = patients.find((p) => p.id === patientId)?.type_de_cas
+    const prev = patients.find((p) => p.id === patientId)?.type_de_cas ?? null
     setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, type_de_cas: newType } : p))
     setOpenDropdown(null)
 
@@ -294,14 +294,14 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     setLoading(true)
 
     const patch = {
-      nom:              formData.nom,
-      prenom:           formData.prenom,
+      nom:              formData.nom              ?? null,
+      prenom:           formData.prenom           ?? null,
       age:              formData.age              ?? null,
       telephone:        formData.telephone        || null,
       date:             formData.date             || null,
-      type_de_cas:      formData.type_de_cas,
-      contact:          formData.contact,
-      statut_dossier:   formData.statut_dossier,
+      type_de_cas:      formData.type_de_cas      ?? null,
+      contact:          formData.contact          ?? null,
+      statut_dossier:   formData.statut_dossier   ?? null,
       pieces_manquantes: formData.pieces_manquantes || null,
       notes:            formData.notes            || null,
       resultat:         formData.resultat         || null,
