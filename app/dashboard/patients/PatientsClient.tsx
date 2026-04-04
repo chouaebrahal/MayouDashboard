@@ -980,6 +980,7 @@ function PatientModal({
           </button>
         </div>
       </div>
+     
     </div>
   )
 }

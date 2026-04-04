@@ -1,7 +1,6 @@
-// app/patients/[id]/PatientDetailsClient.tsx
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 import { Patient } from "@/types/db"
@@ -9,30 +8,28 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import {
   ArrowLeft,
-  Edit,
   Save,
-  X,
+  RotateCcw,
   Phone,
   Calendar,
   FileText,
   Stethoscope,
-  AlertCircle,
   CheckCircle,
   Clock,
   User,
-  Mail,
-  Building,
   Video,
-  Download,
   Printer,
   Trash2,
   Loader2,
-  ChevronDown,
+  Pencil,
+  X,
 } from "lucide-react"
 
 interface PatientDetailsClientProps {
   patient: Patient
 }
+
+// ─── Option lists ─────────────────────────────────────────────────────────────
 
 const STATUT_DOSSIER_OPTIONS = [
   "Dossier complet",
@@ -63,22 +60,24 @@ const CONTACT_STATUS_OPTIONS = [
   "En attente de retour",
 ]
 
+// ─── Color maps ───────────────────────────────────────────────────────────────
+
 const statusColors: Record<string, string> = {
   "Dossier complet": "bg-emerald-600 text-white",
-  "Fichiers manquants": "bg-amber-600 text-white",
+  "Fichiers manquants": "bg-amber-500 text-white",
   "Refus de l'assurance": "bg-rose-700 text-white",
   "Accord de l'assurance": "bg-green-700 text-white",
   "Transmis à l'assurance": "bg-blue-700 text-white",
   "Dossier en préparation": "bg-purple-700 text-white",
-  "Statut inconnu": "bg-gray-600 text-white",
+  "Statut inconnu": "bg-gray-500 text-white",
 }
 
 const typeCasColors: Record<string, string> = {
-  "Non défini": "bg-slate-600 text-white",
+  "Non défini": "bg-slate-500 text-white",
   "Chirurgie": "bg-indigo-700 text-white",
   "Traitement médical": "bg-cyan-700 text-white",
   "Terminé / ATL réalisé": "bg-emerald-700 text-white",
-  "ATL à faire": "bg-orange-700 text-white",
+  "ATL à faire": "bg-orange-600 text-white",
   "Urgence": "bg-rose-700 text-white",
   "Consultation": "bg-blue-700 text-white",
   "Suivi post-op": "bg-teal-700 text-white",
@@ -86,599 +85,575 @@ const typeCasColors: Record<string, string> = {
 
 const contactColors: Record<string, string> = {
   "Contacté": "bg-green-700 text-white",
-  "À appeler": "bg-yellow-600 text-white",
+  "À appeler": "bg-yellow-500 text-white",
   "N'est pas joignable": "bg-red-700 text-white",
   "Rendez-vous pris": "bg-purple-700 text-white",
-  "En attente de retour": "bg-orange-700 text-white",
+  "En attente de retour": "bg-orange-600 text-white",
 }
 
-// ── Stable sub-components (defined outside the parent to preserve identity) ──
+// ─── Inline editable text field ───────────────────────────────────────────────
 
-function InfoRow({ label, value, icon }: { label: string; value: string | null; icon?: React.ReactNode }) {
+interface InlineFieldProps {
+  value: string | null | undefined
+  onChange: (val: string) => void
+  multiline?: boolean
+  placeholder?: string
+  type?: string
+  className?: string
+}
+
+function InlineField({ value, onChange, multiline, placeholder = "—", type = "text", className = "" }: InlineFieldProps) {
+  const [editing, setEditing] = useState(false)
+  const [local, setLocal] = useState(value ?? "")
+  const ref = useRef<HTMLInputElement & HTMLTextAreaElement>(null)
+
+  useEffect(() => { setLocal(value ?? "") }, [value])
+
+  const commit = () => {
+    onChange(local)
+    setEditing(false)
+    ref.current?.blur()
+  }
+
+  const commitAndFocusNext = (e: React.KeyboardEvent) => {
+    e.preventDefault()
+    commit()
+  }
+
+  const cancel = () => {
+    setLocal(value ?? "")
+    setEditing(false)
+  }
+
+  useEffect(() => {
+    if (editing && ref.current) ref.current.focus()
+  }, [editing])
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className={`group relative w-full text-left rounded-lg px-2 py-1.5 -mx-2 hover:bg-cyan-50 transition-colors duration-150 ${className}`}
+      >
+        <span className={value ? "text-slate-700 font-medium" : "text-slate-400 italic"}>
+          {value || placeholder}
+        </span>
+        <span className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Pencil size={12} className="text-cyan-500" />
+        </span>
+      </button>
+    )
+  }
+
+  const sharedProps = {
+    ref: ref as any,
+    value: local,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setLocal(e.target.value),
+    onBlur: commit,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !multiline) { commitAndFocusNext(e) }
+      if (e.key === "Enter" && multiline && (e.ctrlKey || e.metaKey)) { commitAndFocusNext(e) }
+      if (e.key === "Escape") cancel()
+    },
+    className: `w-full px-3 py-2 rounded-lg border border-cyan-400 bg-cyan-50/60 text-slate-800 font-medium
+      focus:outline-none focus:ring-2 focus:ring-cyan-400/40 shadow-sm transition-all text-sm resize-none`,
+  }
+
+  return multiline ? (
+    <textarea {...sharedProps} rows={4} />
+  ) : (
+    <input {...sharedProps} type={type} />
+  )
+}
+
+// ─── Colored select (instant save, always visible) ───────────────────────────
+
+interface ColorSelectProps {
+  value: string
+  options: string[]
+  colors: Record<string, string>
+  onChange: (val: string) => void
+  disabled?: boolean
+}
+
+function ColorSelect({ value, options, colors, onChange, disabled }: ColorSelectProps) {
+  const color = colors[value] ?? "bg-slate-500 text-white"
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-slate-100">
-      <div className="w-8 text-slate-400">{icon}</div>
-      <div className="flex-1">
-        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</p>
-        <p className="text-slate-700 font-medium mt-0.5">{value || "—"}</p>
+    <div className="relative inline-flex">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg text-sm font-semibold cursor-pointer
+          border-0 focus:outline-none focus:ring-2 focus:ring-white/40 shadow-sm transition-all
+          disabled:opacity-60 disabled:cursor-not-allowed ${color}`}
+      >
+        {options.map((opt) => (
+          <option key={opt} value={opt} className="bg-slate-800 text-white">
+            {opt}
+          </option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-70 text-xs">▾</span>
+    </div>
+  )
+}
+
+// ─── InfoRow ──────────────────────────────────────────────────────────────────
+
+function InfoRow({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0 group">
+      <div className="w-7 text-slate-300 pt-0.5 group-hover:text-cyan-400 transition-colors">{icon}</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+        {children}
       </div>
     </div>
   )
 }
 
-interface EditFieldProps {
-  label: string
-  name: keyof Patient
-  type?: string
-  options?: string[]
-  formData: Partial<Patient>
-  setFormData: React.Dispatch<React.SetStateAction<Partial<Patient>>>
-}
-
-function EditField({ label, name, type = "text", options, formData, setFormData }: EditFieldProps) {
-  return (
-    <div className="flex flex-col gap-1 py-1">
-      {label && <label className="text-xs font-semibold text-slate-600">{label}</label>}
-      {options ? (
-        <select
-          value={(formData[name] as string | number) || ""}
-          onChange={(e) => setFormData((prev) => ({ ...prev, [name]: e.target.value }))}
-          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm transition-colors"
-        >
-          {options.map((opt: string) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      ) : type === "textarea" ? (
-        <textarea
-          value={(formData[name] as string | number) || ""}
-          onChange={(e) => setFormData((prev) => ({ ...prev, [name]: e.target.value }))}
-          rows={3}
-          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none text-slate-800 font-medium shadow-sm transition-colors"
-        />
-      ) : (
-        <input
-          type={type}
-          value={(formData[name] as string | number) || ""}
-          onChange={(e) =>
-            setFormData((prev) => ({
-              ...prev,
-              [name]: type === "number" ? parseInt(e.target.value) || null : e.target.value,
-            }))
-          }
-          className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm transition-colors"
-        />
-      )}
-    </div>
-  )
-}
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function PatientDetailsClient({ patient: initialPatient }: PatientDetailsClientProps) {
   const router = useRouter()
   const [patient, setPatient] = useState<Patient>(initialPatient)
-  const [isEditing, setIsEditing] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState<Partial<Patient>>(initialPatient)
+  const [dirty, setDirty] = useState<Partial<Patient>>({})   // only changed fields
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const successTimer = useRef<NodeJS.Timeout>()
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "—"
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
-  }
+  const isDirty = Object.keys(dirty).length > 0
 
-  const formatDateTime = (dateString: string | null) => {
-    if (!dateString) return "—"
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
+  // Merge live patient view with pending dirty changes
+  const live = { ...patient, ...dirty } as Patient
 
-  const handlePrintPdf = () => {
-    const doc = new jsPDF()
-    
-    // Modern minimalist header
-    doc.setFontSize(24)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(30, 41, 59) // Slate-800
-    doc.text("Dossier Patient", 14, 22)
-    
-    doc.setFontSize(10)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(100, 116, 139) // Slate-500
-    doc.text("ClinicFlow", 14, 28)
-    
-    doc.setLineWidth(0.5)
-    doc.setDrawColor(226, 232, 240) // Slate-200
-    doc.line(14, 32, 196, 32)
-    
-    // Patient Identity Section
-    doc.setFontSize(16)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(15, 23, 42) // Slate-900
-    doc.text(`${patient.nom} ${patient.prenom}`, 14, 42)
-    
-    doc.setFontSize(10)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(100, 116, 139) // Slate-500
-    doc.text(`ID: ${patient.id}`, 14, 48)
-    doc.text(`Créé le: ${formatDateTime(patient.created_at)}`, 14, 53)
-
-    // Informations générales with modern minimal table
-    autoTable(doc, {
-      startY: 62,
-      head: [], // No header row to keep it clean
-      body: [
-        ['Âge', patient.age ? `${patient.age} ans` : '—'],
-        ['Téléphone', patient.telephone || '—'],
-        ['Date de RDV', formatDate(patient.date)],
-        ['Médecin référant', patient.referring_doctor || '—'],
-        ['Type de cas', patient.type_de_cas || '—'],
-        ['Statut du dossier', patient.statut_dossier || '—'],
-        ['Statut de contact', patient.contact || '—'],
-      ],
-      theme: 'plain',
-      styles: { 
-        fontSize: 10,
-        cellPadding: 4,
-        textColor: [51, 65, 85] // Slate-700
-      },
-      columnStyles: {
-        0: { fontStyle: 'bold', textColor: [15, 23, 42], cellWidth: 50 },
-        1: { textColor: [71, 85, 105] } // Slate-600
-      },
-      didDrawCell: (data) => {
-        // Add minimal bottom border to rows
-        if (data.row.index < data.table.body.length - 1) {
-          doc.setDrawColor(241, 245, 249) // Slate-100
-          doc.setLineWidth(0.1)
-          doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height)
-        }
+  const patch = useCallback((field: keyof Patient, value: unknown) => {
+    setDirty((prev) => {
+      // If value equals original, remove from dirty
+      if (value === (patient as any)[field]) {
+        const next = { ...prev }
+        delete next[field]
+        return next
       }
+      return { ...prev, [field]: value }
     })
-
-    // Sections de textes longs
-    const finalY = (doc as any).lastAutoTable.finalY || 62
-    let currentY = finalY + 15
-    
-    const addSection = (title: string, content: string | null | undefined) => {
-      if (!content || content.trim() === "") return // Only add section if there is content
-      
-      if (currentY > 260) {
-        doc.addPage()
-        currentY = 20
-      }
-      
-      doc.setFontSize(12)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(15, 23, 42) // Slate-900
-      doc.text(title.toUpperCase(), 14, currentY)
-      
-      // Minimal section underline
-      doc.setDrawColor(226, 232, 240) // Slate-200
-      doc.setLineWidth(0.5)
-      doc.line(14, currentY + 2, 80, currentY + 2)
-      
-      currentY += 8
-      doc.setFontSize(10)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(71, 85, 105) // Slate-600
-      
-      const textLines = doc.splitTextToSize(content, 180)
-      doc.text(textLines, 14, currentY)
-      currentY += textLines.length * 5 + 12
-    }
-
-    addSection("Pièces Manquantes", patient.pieces_manquantes)
-    addSection("Notes Médicales", patient.notes)
-    addSection("Résultat", patient.resultat)
-
-    // Footer
-    const pageCount = (doc as any).internal.getNumberOfPages()
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i)
-      doc.setFontSize(8)
-      doc.setTextColor(148, 163, 184) // Slate-400
-      doc.text(
-        `ClinicFlow — Imprimé le ${new Date().toLocaleDateString('fr-FR')} — Page ${i} sur ${pageCount}`,
-        doc.internal.pageSize.getWidth() / 2,
-        doc.internal.pageSize.getHeight() - 10,
-        { align: 'center' }
-      )
-    }
-    
-    // Save PDF
-    doc.save(`dossier_patient_${patient.nom?.replace(/\s+/g, '_') || 'Inconnu'}_${patient.prenom?.replace(/\s+/g, '_') || 'Inconnu'}.pdf`)
-  }
+  }, [patient])
 
   const handleSave = async () => {
-    setLoading(true)
-    const { error } = await supabase
-      .from("patients")
-      .update({
-        nom: formData.nom,
-        prenom: formData.prenom,
-        age: formData.age,
-        telephone: formData.telephone,
-        date: formData.date,
-        type_de_cas: formData.type_de_cas,
-        contact: formData.contact,
-        statut_dossier: formData.statut_dossier,
-        pieces_manquantes: formData.pieces_manquantes,
-        notes: formData.notes,
-        resultat: formData.resultat,
-        referring_doctor: formData.referring_doctor,
-        video_url: formData.video_url,
-      })
-      .eq("id", patient.id)
-
+    if (!isDirty) return
+    setSaving(true)
+    const { error } = await supabase.from("patients").update(dirty).eq("id", patient.id)
     if (!error) {
-      setPatient({ ...patient, ...formData })
-      setIsEditing(false)
+      setPatient((prev) => ({ ...prev, ...dirty }))
+      setDirty({})
+      setSaveSuccess(true)
+      clearTimeout(successTimer.current)
+      successTimer.current = setTimeout(() => setSaveSuccess(false), 3000)
     } else {
-      alert("Erreur lors de la modification: " + error.message)
+      alert("Erreur lors de la sauvegarde: " + error.message)
     }
-    setLoading(false)
+    setSaving(false)
+  }
+
+  const handleDiscard = () => setDirty({})
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey
+      if (!mod) return
+      const tag = (e.target as HTMLElement).tagName
+      const isInField = tag === "INPUT" || tag === "TEXTAREA"
+      // Ctrl+Enter outside a field → save
+      if (e.key === "Enter" && isDirty && !saving && !isInField) {
+        e.preventDefault()
+        handleSave()
+      }
+      // Ctrl+Z outside a field → discard
+      if (e.key === "z" && isDirty && !isInField) {
+        e.preventDefault()
+        handleDiscard()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [isDirty, saving, dirty])
+
+  // Instant-save for badge-selects (also marks dirty so user can batch if desired)
+  const handleInstantField = async (field: keyof Patient, value: string) => {
+    patch(field, value)
+    // Optimistically update live view immediately
+    setPatient((prev) => ({ ...prev, [field]: value }))
+    // Persist right away for these quick-action selects
+    await supabase.from("patients").update({ [field]: value }).eq("id", patient.id)
+    // Remove from dirty (already persisted)
+    setDirty((prev) => { const n = { ...prev }; delete n[field]; return n })
   }
 
   const handleDelete = async () => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer ce patient ? Cette action est irréversible.")) return
-    
-    setLoading(true)
+    setDeleting(true)
     const { error } = await supabase.from("patients").delete().eq("id", patient.id)
-
-    if (!error) {
-      router.push("/patients")
-    } else {
-      alert("Erreur lors de la suppression: " + error.message)
-    }
-    setLoading(false)
+    if (!error) router.push("/dashboard/patients")
+    else { alert("Erreur lors de la suppression: " + error.message); setDeleting(false) }
   }
 
-  const handleStatusChange = async (newStatus: string) => {
-    setLoading(true)
-    const { error } = await supabase
-      .from("patients")
-      .update({ statut_dossier: newStatus })
-      .eq("id", patient.id)
+  const formatDate = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—"
 
-    if (!error) {
-      setPatient({ ...patient, statut_dossier: newStatus })
-      if (isEditing) setFormData({ ...formData, statut_dossier: newStatus })
+  const formatDateTime = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"
+
+  const handlePrintPdf = () => {
+    const doc = new jsPDF()
+    doc.setFontSize(24); doc.setFont("helvetica", "bold"); doc.setTextColor(30, 41, 59)
+    doc.text("Dossier Patient", 14, 22)
+    doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139)
+    doc.text("ClinicFlow", 14, 28)
+    doc.setLineWidth(0.5); doc.setDrawColor(226, 232, 240); doc.line(14, 32, 196, 32)
+    doc.setFontSize(16); doc.setFont("helvetica", "bold"); doc.setTextColor(15, 23, 42)
+    doc.text(`${live.nom} ${live.prenom}`, 14, 42)
+    doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139)
+    doc.text(`ID: ${live.id}`, 14, 48)
+    doc.text(`Créé le: ${formatDateTime(live.created_at)}`, 14, 53)
+
+    autoTable(doc, {
+      startY: 62,
+      head: [],
+      body: [
+        ["Âge", live.age ? `${live.age} ans` : "—"],
+        ["Téléphone", live.telephone || "—"],
+        ["Date de RDV", formatDate(live.date)],
+        ["Médecin référant", live.referring_doctor || "—"],
+        ["Type de cas", live.type_de_cas || "—"],
+        ["Statut du dossier", live.statut_dossier || "—"],
+        ["Statut de contact", live.contact || "—"],
+      ],
+      theme: "plain",
+      styles: { fontSize: 10, cellPadding: 4, textColor: [51, 65, 85] },
+      columnStyles: {
+        0: { fontStyle: "bold", textColor: [15, 23, 42], cellWidth: 50 },
+        1: { textColor: [71, 85, 105] },
+      },
+    })
+
+    const finalY = (doc as any).lastAutoTable.finalY || 62
+    let y = finalY + 15
+
+    const addSection = (title: string, content: string | null | undefined) => {
+      if (!content?.trim()) return
+      if (y > 260) { doc.addPage(); y = 20 }
+      doc.setFontSize(12); doc.setFont("helvetica", "bold"); doc.setTextColor(15, 23, 42)
+      doc.text(title.toUpperCase(), 14, y)
+      doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.5); doc.line(14, y + 2, 80, y + 2)
+      y += 8
+      doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(71, 85, 105)
+      const lines = doc.splitTextToSize(content, 180)
+      doc.text(lines, 14, y)
+      y += lines.length * 5 + 12
     }
-    setLoading(false)
-  }
 
-  const handleContactChange = async (newContact: string) => {
-    setLoading(true)
-    const { error } = await supabase
-      .from("patients")
-      .update({ contact: newContact })
-      .eq("id", patient.id)
+    addSection("Pièces Manquantes", live.pieces_manquantes)
+    addSection("Notes Médicales", live.notes)
+    addSection("Résultat", live.resultat)
 
-    if (!error) {
-      setPatient({ ...patient, contact: newContact })
-      if (isEditing) setFormData({ ...formData, contact: newContact })
+    const pageCount = (doc as any).internal.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFontSize(8); doc.setTextColor(148, 163, 184)
+      doc.text(
+        `ClinicFlow — Imprimé le ${new Date().toLocaleDateString("fr-FR")} — Page ${i} sur ${pageCount}`,
+        doc.internal.pageSize.getWidth() / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: "center" }
+      )
     }
-    setLoading(false)
+
+    doc.save(`dossier_patient_${live.nom?.replace(/\s+/g, "_") || "Inconnu"}_${live.prenom?.replace(/\s+/g, "_") || "Inconnu"}.pdf`)
   }
-
-  const handleTypeCasChange = async (newType: string) => {
-    setLoading(true)
-    const { error } = await supabase
-      .from("patients")
-      .update({ type_de_cas: newType })
-      .eq("id", patient.id)
-
-    if (!error) {
-      setPatient({ ...patient, type_de_cas: newType })
-      if (isEditing) setFormData({ ...formData, type_de_cas: newType })
-    }
-    setLoading(false)
-  }
-
-  // InfoRow and EditField are defined outside the component (see below)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-100/40">
-      <div className="p-8">
-        {/* Header with navigation */}
-        <div className="flex items-center justify-between mb-6">
+      <div className={`p-6 max-w-7xl mx-auto transition-[padding] duration-300 ${isDirty ? "pb-24" : ""}`}>
+
+        {/* ── Top bar ── */}
+        <div className="flex items-center justify-between mb-6 gap-3">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition"
+            className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all duration-150 shrink-0"
           >
             <ArrowLeft size={18} />
             Retour
           </button>
-          <div className="flex gap-2">
-            {!isEditing ? (
-              <>
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-xl font-medium hover:bg-cyan-700 transition shadow-sm"
-                >
-                  <Edit size={16} />
-                  Modifier
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition shadow-sm"
-                >
-                  <Trash2 size={16} />
-                  Supprimer
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => {
-                    setIsEditing(false)
-                    setFormData(patient)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-300 transition"
-                >
-                  <X size={16} />
-                  Annuler
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition shadow-sm"
-                >
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  Enregistrer
-                </button>
-              </>
-            )}
+
+          {/* Center: unsaved changes pill — replaces the hint text */}
+          <div className={`flex items-center gap-2 transition-all duration-300 ${isDirty ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            <span className="text-xs text-slate-500 hidden sm:block">Modifications non enregistrées</span>
+            <button
+              onClick={handleDiscard}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-sm transition disabled:opacity-50"
+            >
+              <RotateCcw size={12} />
+              Annuler
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-60"
+            >
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
           </div>
+
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-all duration-150 shadow-sm disabled:opacity-60 shrink-0"
+          >
+            {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            Supprimer
+          </button>
         </div>
 
-        {/* Main content */}
+        {/* ── Grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left column - Patient Info */}
+
+          {/* ── LEFT: 2/3 ── */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Header Card */}
+
+            {/* Header card */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-4">
+              <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-5">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                    <User size={32} className="text-white" />
+                  <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0">
+                    <User size={30} className="text-white" />
                   </div>
-                  <div>
-                    <h1 className="text-2xl font-bold text-white">
-                      {patient.nom} {patient.prenom}
-                    </h1>
-                    <p className="text-cyan-100">ID: {patient.id?.slice(0, 8)}</p>
+                  <div className="flex-1 min-w-0">
+                    {/* Nom + Prénom inline editable in header */}
+                    <div className="flex gap-2 flex-wrap">
+                      <input
+                        defaultValue={live.nom ?? ""}
+                        onBlur={(e) => patch("nom", e.target.value)}
+                        placeholder="Nom"
+                        className="bg-transparent border-b border-white/40 text-white text-xl font-bold placeholder-white/50
+                          focus:outline-none focus:border-white w-32 pb-0.5 transition-colors"
+                      />
+                      <input
+                        defaultValue={live.prenom ?? ""}
+                        onBlur={(e) => patch("prenom", e.target.value)}
+                        placeholder="Prénom"
+                        className="bg-transparent border-b border-white/40 text-white text-xl font-bold placeholder-white/50
+                          focus:outline-none focus:border-white w-36 pb-0.5 transition-colors"
+                      />
+                    </div>
+                    <p className="text-cyan-100 text-sm mt-1">ID: {live.id?.slice(0, 8)}</p>
                   </div>
                 </div>
               </div>
-              
-              <div className="p-6">
-                {!isEditing ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <InfoRow label="Âge" value={patient.age ? `${patient.age} ans` : null} icon={<Calendar size={16} />} />
-                    <InfoRow label="Téléphone" value={patient.telephone} icon={<Phone size={16} />} />
-                    <InfoRow label="Date de rendez-vous" value={formatDate(patient.date)} icon={<Calendar size={16} />} />
-                    <InfoRow label="Médecin référant" value={patient.referring_doctor} icon={<Stethoscope size={16} />} />
-                    <InfoRow label="Date de création" value={formatDateTime(patient.created_at)} icon={<Clock size={16} />} />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <EditField label="Nom" name="nom" formData={formData} setFormData={setFormData} />
-                    <EditField label="Prénom" name="prenom" formData={formData} setFormData={setFormData} />
-                    <EditField label="Âge" name="age" type="number" formData={formData} setFormData={setFormData} />
-                    <EditField label="Téléphone" name="telephone" formData={formData} setFormData={setFormData} />
-                    <EditField label="Date de rendez-vous" name="date" type="date" formData={formData} setFormData={setFormData} />
-                    <EditField label="Médecin référant" name="referring_doctor" formData={formData} setFormData={setFormData} />
-                  </div>
-                )}
+
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-1">
+                <InfoRow label="Âge" icon={<User size={15} />}>
+                  <InlineField
+                    value={live.age?.toString() ?? ""}
+                    onChange={(v) => patch("age", v ? parseInt(v) : null)}
+                    type="number"
+                    placeholder="Non renseigné"
+                  />
+                </InfoRow>
+                <InfoRow label="Téléphone" icon={<Phone size={15} />}>
+                  <InlineField
+                    value={live.telephone}
+                    onChange={(v) => patch("telephone", v)}
+                    type="tel"
+                    placeholder="Non renseigné"
+                  />
+                </InfoRow>
+                <InfoRow label="Date de rendez-vous" icon={<Calendar size={15} />}>
+                  <InlineField
+                    value={live.date ?? ""}
+                    onChange={(v) => patch("date", v)}
+                    type="date"
+                    placeholder="—"
+                  />
+                </InfoRow>
+                <InfoRow label="Médecin référant" icon={<Stethoscope size={15} />}>
+                  <InlineField
+                    value={live.referring_doctor}
+                    onChange={(v) => patch("referring_doctor", v)}
+                    placeholder="Non renseigné"
+                  />
+                </InfoRow>
+                <InfoRow label="Créé le" icon={<Clock size={15} />}>
+                  <span className="text-slate-600 text-sm font-medium">{formatDateTime(live.created_at)}</span>
+                </InfoRow>
               </div>
             </div>
 
-            {/* Status Cards */}
+            {/* Status badges row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Type de cas */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Type de cas</p>
-                {!isEditing ? (
-                  <select
-                    value={patient.type_de_cas || "Non défini"}
-                    onChange={(e) => handleTypeCasChange(e.target.value)}
-                    className={`mt-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${typeCasColors[patient.type_de_cas || "Non défini"]} cursor-pointer border-0`}
-                    disabled={loading}
-                  >
-                    {TYPE_CAS_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <EditField label="" name="type_de_cas" options={TYPE_CAS_OPTIONS} formData={formData} setFormData={setFormData} />
-                )}
-              </div>
-
-              {/* Statut dossier */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Statut dossier</p>
-                {!isEditing ? (
-                  <select
-                    value={patient.statut_dossier || "Statut inconnu"}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                    className={`mt-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${statusColors[patient.statut_dossier || "Statut inconnu"]} cursor-pointer border-0`}
-                    disabled={loading}
-                  >
-                    {STATUT_DOSSIER_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <EditField label="" name="statut_dossier" options={STATUT_DOSSIER_OPTIONS} formData={formData} setFormData={setFormData} />
-                )}
-              </div>
-
-              {/* Contact status */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Statut contact</p>
-                {!isEditing ? (
-                  <select
-                    value={patient.contact || "À appeler"}
-                    onChange={(e) => handleContactChange(e.target.value)}
-                    className={`mt-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${contactColors[patient.contact || "À appeler"]} cursor-pointer border-0`}
-                    disabled={loading}
-                  >
-                    {CONTACT_STATUS_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <EditField label="" name="contact" options={CONTACT_STATUS_OPTIONS} formData={formData} setFormData={setFormData} />
-                )}
-              </div>
+              {[
+                { label: "Type de cas", field: "type_de_cas" as keyof Patient, options: TYPE_CAS_OPTIONS, colors: typeCasColors, fallback: "Non défini" },
+                { label: "Statut dossier", field: "statut_dossier" as keyof Patient, options: STATUT_DOSSIER_OPTIONS, colors: statusColors, fallback: "Statut inconnu" },
+                { label: "Statut contact", field: "contact" as keyof Patient, options: CONTACT_STATUS_OPTIONS, colors: contactColors, fallback: "À appeler" },
+              ].map(({ label, field, options, colors, fallback }) => (
+                <div key={field} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{label}</p>
+                  <ColorSelect
+                    value={(live[field] as string) || fallback}
+                    options={options}
+                    colors={colors}
+                    onChange={(v) => handleInstantField(field, v)}
+                  />
+                </div>
+              ))}
             </div>
 
-            {/* Documents section */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <FileText size={18} className="text-cyan-600" />
-                  Pièces manquantes
-                </h2>
+            {/* Text sections */}
+            {[
+              { title: "Pièces manquantes", icon: <FileText size={17} className="text-amber-500" />, field: "pieces_manquantes" as keyof Patient, placeholder: "Aucune pièce manquante signalée" },
+              { title: "Notes médicales", icon: <FileText size={17} className="text-cyan-600" />, field: "notes" as keyof Patient, placeholder: "Aucune note" },
+              { title: "Résultat", icon: <CheckCircle size={17} className="text-emerald-600" />, field: "resultat" as keyof Patient, placeholder: "Aucun résultat enregistré" },
+            ].map(({ title, icon, field, placeholder }) => (
+              <div key={field} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+                  {icon}
+                  <h2 className="font-semibold text-slate-800">{title}</h2>
+                </div>
+                <div className="p-5">
+                  <InlineField
+                    value={live[field] as string}
+                    onChange={(v) => patch(field, v)}
+                    multiline
+                    placeholder={placeholder}
+                  />
+                </div>
               </div>
-              <div className="p-6">
-                {!isEditing ? (
-                  <p className="text-slate-600">{patient.pieces_manquantes || "Aucune pièce manquante signalée"}</p>
-                ) : (
-                  <EditField label="" name="pieces_manquantes" type="textarea" formData={formData} setFormData={setFormData} />
-                )}
-              </div>
-            </div>
-
-            {/* Notes section */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <FileText size={18} className="text-cyan-600" />
-                  Notes médicales
-                </h2>
-              </div>
-              <div className="p-6">
-                {!isEditing ? (
-                  <p className="text-slate-600 whitespace-pre-wrap">{patient.notes || "Aucune note"}</p>
-                ) : (
-                  <EditField label="" name="notes" type="textarea" formData={formData} setFormData={setFormData} />
-                )}
-              </div>
-            </div>
-
-            {/* Result section */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <CheckCircle size={18} className="text-emerald-600" />
-                  Résultat
-                </h2>
-              </div>
-              <div className="p-6">
-                {!isEditing ? (
-                  <p className="text-slate-600 whitespace-pre-wrap">{patient.resultat || "Aucun résultat enregistré"}</p>
-                ) : (
-                  <EditField label="" name="resultat" type="textarea" formData={formData} setFormData={setFormData} />
-                )}
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Right column - Additional Info */}
+          {/* ── RIGHT: 1/3 ── */}
           <div className="space-y-6">
-            {/* Video URL Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <Video size={18} className="text-purple-600" />
-                  Vidéo / Document
-                </h2>
+
+            {/* Video/doc */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+                <Video size={17} className="text-purple-600" />
+                <h2 className="font-semibold text-slate-800">Vidéo / Document</h2>
               </div>
-              <div className="p-6">
-                {!isEditing ? (
-                  patient.video_url ? (
-                    <a
-                      href={patient.video_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-cyan-600 hover:text-cyan-700 flex items-center gap-2"
-                    >
-                      <Video size={16} />
-                      Voir le document
-                    </a>
-                  ) : (
-                    <p className="text-slate-400">Aucun document lié</p>
-                  )
-                ) : (
-                  <EditField label="URL Vidéo / Document" name="video_url" formData={formData} setFormData={setFormData} />
+              <div className="p-5 space-y-3">
+                <InlineField
+                  value={live.video_url}
+                  onChange={(v) => patch("video_url", v)}
+                  placeholder="Coller un lien URL…"
+                />
+                {live.video_url && (
+                  <a
+                    href={live.video_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-cyan-600 hover:text-cyan-700 font-medium"
+                  >
+                    <Video size={14} />
+                    Ouvrir le document
+                  </a>
                 )}
               </div>
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick actions */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
               <div className="px-6 py-4 border-b border-slate-100">
                 <h2 className="font-semibold text-slate-800">Actions rapides</h2>
               </div>
               <div className="p-4 space-y-2">
                 <button
-                  onClick={() => window.location.href = `tel:${patient.telephone}`}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-slate-100 transition"
+                  onClick={() => { window.location.href = `tel:${live.telephone}` }}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-green-50 hover:text-green-700 transition-all duration-150 text-sm font-medium"
                 >
-                  <Phone size={18} className="text-green-600" />
+                  <Phone size={17} className="text-green-600" />
                   Appeler le patient
                 </button>
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(patient.id || "")
-                    alert("ID copié dans le presse-papier")
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-slate-100 transition"
+                  onClick={() => { navigator.clipboard.writeText(live.id || ""); alert("ID copié !") }}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-all duration-150 text-sm font-medium"
                 >
-                  <FileText size={18} className="text-blue-600" />
+                  <FileText size={17} className="text-blue-600" />
                   Copier l'ID patient
                 </button>
                 <button
                   onClick={handlePrintPdf}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-slate-100 transition"
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition-all duration-150 text-sm font-medium"
                 >
-                  <Printer size={18} className="text-purple-600" />
+                  <Printer size={17} className="text-purple-600" />
                   Imprimer le dossier
                 </button>
               </div>
             </div>
 
-            {/* Doctor Info */}
-            <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-2xl p-5 text-white shadow-sm">
-              <Stethoscope size={24} className="mb-3 opacity-80" />
-              <h3 className="font-semibold text-lg">Dr. Abdelhamid Mayou</h3>
+            {/* Doctor card */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-2xl p-5 text-white shadow-sm">
+              <Stethoscope size={22} className="mb-3 opacity-70" />
+              <h3 className="font-semibold text-lg leading-tight">Dr. Abdelhamid Mayou</h3>
               <p className="text-slate-300 text-sm mt-1">Médecin traitant</p>
-              <div className="mt-4 pt-4 border-t border-slate-600">
-                <p className="text-xs text-slate-300">Dernière modification</p>
-                <p className="text-sm">{formatDateTime(patient.created_at)}</p>
+              <div className="mt-4 pt-4 border-t border-slate-600/60">
+                <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                  <Clock size={11} />
+                  Créé le
+                </p>
+                <p className="text-sm text-slate-200 mt-0.5">{formatDateTime(live.created_at)}</p>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Floating save pill — bottom-right corner, never overlaps content ── */}
+      <div
+        className={`fixed bottom-6 right-6 z-40 flex items-center gap-2 transition-all duration-300 ease-in-out ${
+          isDirty
+            ? "opacity-100 translate-y-0 pointer-events-auto"
+            : "opacity-0 translate-y-4 pointer-events-none"
+        }`}
+      >
+        <button
+          onClick={handleDiscard}
+          disabled={saving}
+          title="Annuler les modifications (Ctrl + Z)"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-lg transition disabled:opacity-50"
+        >
+          <RotateCcw size={13} />
+          <span>Annuler</span>
+          <kbd className="ml-1 px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 rounded-md leading-none text-slate-400">⌃Z</kbd>
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          title="Enregistrer (Ctrl + Entrée)"
+          className="flex items-center gap-1.5 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold rounded-xl shadow-lg transition disabled:opacity-60"
+        >
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          <span>{saving ? "Enregistrement…" : "Enregistrer"}</span>
+          {!saving && (
+            <kbd className="ml-1 px-1.5 py-0.5 text-[10px] font-mono bg-white/20 rounded-md leading-none">
+              ⌃↵
+            </kbd>
+          )}
+        </button>
+      </div>
+
+      {/* ── Save success toast ── */}
+      <div
+        className={`fixed bottom-20 right-6 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl
+          transition-all duration-500 ${saveSuccess ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}
+      >
+        <CheckCircle size={18} />
+        <span className="text-sm font-semibold">Dossier enregistré avec succès</span>
       </div>
     </div>
   )
