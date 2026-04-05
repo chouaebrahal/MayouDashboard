@@ -223,7 +223,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const successTimer = useRef<NodeJS.Timeout>()
+  const successTimer = useRef<NodeJS.Timeout | null>(null)
 
   const isDirty = Object.keys(dirty).length > 0
 
@@ -250,8 +250,9 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
       setPatient((prev) => ({ ...prev, ...dirty }))
       setDirty({})
       setSaveSuccess(true)
-      clearTimeout(successTimer.current)
+      if (successTimer.current) clearTimeout(successTimer.current)
       successTimer.current = setTimeout(() => setSaveSuccess(false), 3000)
+      router.refresh()
     } else {
       alert("Erreur lors de la sauvegarde: " + error.message)
     }
@@ -291,14 +292,20 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
     await supabase.from("patients").update({ [field]: value }).eq("id", patient.id)
     // Remove from dirty (already persisted)
     setDirty((prev) => { const n = { ...prev }; delete n[field]; return n })
+    router.refresh()
   }
 
   const handleDelete = async () => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer ce patient ? Cette action est irréversible.")) return
     setDeleting(true)
     const { error } = await supabase.from("patients").delete().eq("id", patient.id)
-    if (!error) router.push("/dashboard/patients")
-    else { alert("Erreur lors de la suppression: " + error.message); setDeleting(false) }
+    if (!error) {
+      router.push("/dashboard/patients")
+      router.refresh()
+    } else {
+      alert("Erreur lors de la suppression: " + error.message)
+      setDeleting(false)
+    }
   }
 
   const formatDate = (d: string | null) =>

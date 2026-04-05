@@ -128,7 +128,11 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
-  const [formData, setFormData] = useState<Partial<Patient>>(EMPTY_FORM)
+
+  // ── Sync with server when cache invalidates ──────────────────────────────────
+  useEffect(() => {
+    setPatients(initialPatients)
+  }, [initialPatients])
 
   // ── Close dropdowns when clicking outside ──────────────────────────────────
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -212,8 +216,10 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       // Rollback
       setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, statut_dossier: prev } : p))
       alert("Erreur lors de la mise à jour: " + error.message)
+    } else {
+      router.refresh()
     }
-  }, [patients])
+  }, [patients, router])
 
   const handleContactChange = useCallback(async (patientId: string, newContact: string) => {
     const prev = patients.find((p) => p.id === patientId)?.contact ?? null
@@ -228,8 +234,10 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     if (error) {
       setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, contact: prev } : p))
       alert("Erreur lors de la mise à jour: " + error.message)
+    } else {
+      router.refresh()
     }
-  }, [patients])
+  }, [patients, router])
 
   const handleTypeCasChange = useCallback(async (patientId: string, newType: string) => {
     const prev = patients.find((p) => p.id === patientId)?.type_de_cas ?? null
@@ -244,12 +252,14 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     if (error) {
       setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, type_de_cas: prev } : p))
       alert("Erreur lors de la mise à jour: " + error.message)
+    } else {
+      router.refresh()
     }
-  }, [patients])
+  }, [patients, router])
 
   // ── Add ──────────────────────────────────────────────────────────────────────
-  const handleAddPatient = async () => {
-    if (!formData.nom || !formData.prenom) {
+  const handleAddPatient = async (submittedData: Partial<Patient>) => {
+    if (!submittedData.nom || !submittedData.prenom) {
       alert("Veuillez remplir le nom et le prénom")
       return
     }
@@ -258,19 +268,19 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     const { data, error } = await supabase
       .from("patients")
       .insert([{
-        nom:              formData.nom,
-        prenom:           formData.prenom,
-        age:              formData.age              || null,
-        telephone:        formData.telephone        || null,
-        date:             formData.date             || null,
-        type_de_cas:      formData.type_de_cas      || "Non défini",
-        contact:          formData.contact          || "À appeler",
-        statut_dossier:   formData.statut_dossier   || "Dossier en préparation",
-        pieces_manquantes: formData.pieces_manquantes || null,
-        notes:            formData.notes            || null,
-        resultat:         formData.resultat         || null,
-        referring_doctor: formData.referring_doctor || null,
-        video_url:        formData.video_url        || null,
+        nom:              submittedData.nom,
+        prenom:           submittedData.prenom,
+        age:              submittedData.age              || null,
+        telephone:        submittedData.telephone        || null,
+        date:             submittedData.date             || null,
+        type_de_cas:      submittedData.type_de_cas      || "Non défini",
+        contact:          submittedData.contact          || "À appeler",
+        statut_dossier:   submittedData.statut_dossier   || "Dossier en préparation",
+        pieces_manquantes: submittedData.pieces_manquantes || null,
+        notes:            submittedData.notes            || null,
+        resultat:         submittedData.resultat         || null,
+        referring_doctor: submittedData.referring_doctor || null,
+        video_url:        submittedData.video_url        || null,
       }])
       .select()
       .single()
@@ -285,28 +295,28 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     // Prepend the new record returned by Supabase (has real id + created_at)
     setPatients((ps) => [data, ...ps])
     setShowAddModal(false)
-    setFormData(EMPTY_FORM)
+    router.refresh()
   }
 
   // ── Edit ─────────────────────────────────────────────────────────────────────
-  const handleEditPatient = async () => {
+  const handleEditPatient = async (submittedData: Partial<Patient>) => {
     if (!selectedPatient) return
     setLoading(true)
 
     const patch = {
-      nom:              formData.nom              ?? null,
-      prenom:           formData.prenom           ?? null,
-      age:              formData.age              ?? null,
-      telephone:        formData.telephone        || null,
-      date:             formData.date             || null,
-      type_de_cas:      formData.type_de_cas      ?? null,
-      contact:          formData.contact          ?? null,
-      statut_dossier:   formData.statut_dossier   ?? null,
-      pieces_manquantes: formData.pieces_manquantes || null,
-      notes:            formData.notes            || null,
-      resultat:         formData.resultat         || null,
-      referring_doctor: formData.referring_doctor || null,
-      video_url:        formData.video_url        || null,
+      nom:              submittedData.nom              ?? null,
+      prenom:           submittedData.prenom           ?? null,
+      age:              submittedData.age              ?? null,
+      telephone:        submittedData.telephone        || null,
+      date:             submittedData.date             || null,
+      type_de_cas:      submittedData.type_de_cas      ?? null,
+      contact:          submittedData.contact          ?? null,
+      statut_dossier:   submittedData.statut_dossier   ?? null,
+      pieces_manquantes: submittedData.pieces_manquantes || null,
+      notes:            submittedData.notes            || null,
+      resultat:         submittedData.resultat         || null,
+      referring_doctor: submittedData.referring_doctor || null,
+      video_url:        submittedData.video_url        || null,
     }
 
     const { error } = await supabase
@@ -326,6 +336,7 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     )
     setShowEditModal(false)
     setSelectedPatient(null)
+    router.refresh()
   }
 
   // ── Delete ───────────────────────────────────────────────────────────────────
@@ -341,6 +352,8 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     if (error) {
       setPatients(backup)
       alert("Erreur lors de la suppression: " + error.message)
+    } else {
+      router.refresh()
     }
   }
 
@@ -350,8 +363,6 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
 
   const openEditModal = (patient: Patient) => {
     setSelectedPatient(patient)
-    // Spread into a fresh object so we never mutate the list item directly
-    setFormData({ ...EMPTY_FORM, ...patient })
     setShowEditModal(true)
   }
 
@@ -393,7 +404,7 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
             </p>
           </div>
           <button
-            onClick={() => { setFormData(EMPTY_FORM); setShowAddModal(true) }}
+            onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-700 to-blue-700 text-white rounded-2xl font-medium shadow-lg shadow-cyan-500/30 hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
           >
             <UserPlus size={18} />
@@ -728,10 +739,9 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       {showAddModal && (
         <PatientModal
           title="Nouveau patient"
-          formData={formData}
-          setFormData={setFormData}
+          initialData={EMPTY_FORM}
           onSave={handleAddPatient}
-          onClose={() => { setShowAddModal(false); setFormData(EMPTY_FORM) }}
+          onClose={() => setShowAddModal(false)}
           loading={loading}
         />
       )}
@@ -739,8 +749,7 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       {showEditModal && selectedPatient && (
         <PatientModal
           title="Modifier le patient"
-          formData={formData}
-          setFormData={setFormData}
+          initialData={{ ...EMPTY_FORM, ...selectedPatient }}
           onSave={handleEditPatient}
           onClose={() => { setShowEditModal(false); setSelectedPatient(null) }}
           loading={loading}
@@ -753,19 +762,18 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function PatientModal({
   title,
-  formData,
-  setFormData,
+  initialData,
   onSave,
   onClose,
   loading,
 }: {
   title: string
-  formData: Partial<Patient>
-  setFormData: (data: Partial<Patient>) => void
-  onSave: () => void
+  initialData: Partial<Patient>
+  onSave: (data: Partial<Patient>) => void
   onClose: () => void
   loading: boolean
 }) {
+  const [formData, setFormData] = useState<Partial<Patient>>(initialData)
   const [useDob, setUseDob] = useState(false)
 
   return (
@@ -972,7 +980,7 @@ function PatientModal({
             Annuler
           </button>
           <button
-            onClick={onSave}
+            onClick={() => onSave(formData)}
             disabled={loading || !formData.nom || !formData.prenom}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-700 to-blue-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition flex items-center gap-2"
           >
