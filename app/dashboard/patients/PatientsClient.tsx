@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Eye,
   ChevronDown,
+  CheckCircle,
 } from "lucide-react"
 
 interface PatientsClientProps {
@@ -121,13 +122,14 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
   const [sortField, setSortField] = useState<SortField>("created_at")
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(10)
+  const itemsPerPage = 10
   const [loading, setLoading] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   // ── Sync with server when cache invalidates ──────────────────────────────────
   useEffect(() => {
@@ -182,7 +184,14 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     })
 
     setFilteredPatients(filtered)
-    setCurrentPage(1)
+    
+    // Only reset page if we're resetting search (which is a major filter change)
+    // For dropdown filters and sort changes, keep the current page if valid
+    setCurrentPage((prevPage) => {
+      const newTotalPages = Math.ceil(filtered.length / itemsPerPage)
+      // Only reset to page 1 if current page is now out of bounds
+      return prevPage > newTotalPages ? 1 : prevPage
+    })
   }, [searchTerm, statusFilter, typeCasFilter, contactFilter, sortField, sortOrder, patients])
 
   const totalPages = Math.ceil(filteredPatients.length / itemsPerPage)
@@ -217,9 +226,10 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, statut_dossier: prev } : p))
       alert("Erreur lors de la mise à jour: " + error.message)
     } else {
-      router.refresh()
+      setSuccessMsg("Statut mis à jour")
+      setTimeout(() => setSuccessMsg(null), 2000)
     }
-  }, [patients, router])
+  }, [patients])
 
   const handleContactChange = useCallback(async (patientId: string, newContact: string) => {
     const prev = patients.find((p) => p.id === patientId)?.contact ?? null
@@ -235,9 +245,10 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, contact: prev } : p))
       alert("Erreur lors de la mise à jour: " + error.message)
     } else {
-      router.refresh()
+      setSuccessMsg("Contact mis à jour")
+      setTimeout(() => setSuccessMsg(null), 2000)
     }
-  }, [patients, router])
+  }, [patients])
 
   const handleTypeCasChange = useCallback(async (patientId: string, newType: string) => {
     const prev = patients.find((p) => p.id === patientId)?.type_de_cas ?? null
@@ -253,9 +264,10 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       setPatients((ps) => ps.map((p) => p.id === patientId ? { ...p, type_de_cas: prev } : p))
       alert("Erreur lors de la mise à jour: " + error.message)
     } else {
-      router.refresh()
+      setSuccessMsg("Type de cas mis à jour")
+      setTimeout(() => setSuccessMsg(null), 2000)
     }
-  }, [patients, router])
+  }, [patients])
 
   // ── Add ──────────────────────────────────────────────────────────────────────
   const handleAddPatient = async (submittedData: Partial<Patient>) => {
@@ -295,7 +307,8 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     // Prepend the new record returned by Supabase (has real id + created_at)
     setPatients((ps) => [data, ...ps])
     setShowAddModal(false)
-    router.refresh()
+    setSuccessMsg("Patient ajouté avec succès")
+    setTimeout(() => setSuccessMsg(null), 2000)
   }
 
   // ── Edit ─────────────────────────────────────────────────────────────────────
@@ -336,7 +349,8 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
     )
     setShowEditModal(false)
     setSelectedPatient(null)
-    router.refresh()
+    setSuccessMsg("Patient modifié avec succès")
+    setTimeout(() => setSuccessMsg(null), 2000)
   }
 
   // ── Delete ───────────────────────────────────────────────────────────────────
@@ -353,7 +367,8 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       setPatients(backup)
       alert("Erreur lors de la suppression: " + error.message)
     } else {
-      router.refresh()
+      setSuccessMsg("Patient supprimé")
+      setTimeout(() => setSuccessMsg(null), 2000)
     }
   }
 
@@ -411,6 +426,14 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
             Nouveau patient
           </button>
         </div>
+
+        {/* Success Toast */}
+        {successMsg && (
+          <div className="fixed top-20 right-8 z-50 flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-lg animate-fade-in-down">
+            <CheckCircle size={16} />
+            <span className="text-sm font-medium">{successMsg}</span>
+          </div>
+        )}
 
         {/* Filters Bar */}
         <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-6 shadow-sm">
