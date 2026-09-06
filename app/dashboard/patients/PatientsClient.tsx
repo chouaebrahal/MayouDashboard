@@ -32,6 +32,9 @@ import {
 
 interface PatientsClientProps {
   initialPatients: Patient[]
+  pageTitle?: string
+  pageDescription?: string
+  searchMode?: "patients" | "cas-specifiques"
 }
 
 type SortField = "nom" | "prenom" | "created_at" | "date" | "statut_dossier" | "type_de_cas" | "age"
@@ -102,6 +105,8 @@ const EMPTY_FORM: Partial<Patient> = {
   telephone: "",
   date: "",
   type_de_cas: "Non défini",
+  cto: false,
+  cas_specifique: "",
   contact: "À appeler",
   statut_dossier: "Dossier en préparation",
   pieces_manquantes: "",
@@ -111,13 +116,21 @@ const EMPTY_FORM: Partial<Patient> = {
   video_url: "",
 }
 
-export default function PatientsClient({ initialPatients }: PatientsClientProps) {
+export default function PatientsClient({
+  initialPatients,
+  pageTitle = "Patients",
+  pageDescription = "Gérez tous vos patients et leurs dossiers médicaux",
+  searchMode = "patients",
+}: PatientsClientProps) {
   const router = useRouter()
   const [patients, setPatients] = useState<Patient[]>(initialPatients)
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>(initialPatients)
   const [searchTerm, setSearchTerm] = useState("")
+  const [patientSearchTerm, setPatientSearchTerm] = useState("")
+  const [specificCaseSearchTerm, setSpecificCaseSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("")
   const [typeCasFilter, setTypeCasFilter] = useState<string>("")
+  const [ctoFilter, setCtoFilter] = useState<string>("")
   const [contactFilter, setContactFilter] = useState<string>("")
   const [sortField, setSortField] = useState<SortField>("created_at")
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
@@ -152,20 +165,48 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
   // ── Filter + sort ───────────────────────────────────────────────────────────
   useEffect(() => {
     let filtered = [...patients]
+    const normalizeSearch = (value: string | null | undefined) =>
+      (value || "").trim().toLocaleLowerCase().replace(/\s+/g, " ")
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase()
+    if (searchMode === "cas-specifiques") {
+      const patientTerm = normalizeSearch(patientSearchTerm)
+      const caseTerm = normalizeSearch(specificCaseSearchTerm)
+      if (patientTerm) {
+        filtered = filtered.filter(
+          (p) => {
+            const lastName = normalizeSearch(p.nom)
+            const firstName = normalizeSearch(p.prenom)
+            const fullName = `${firstName} ${lastName}`.trim()
+            const reversedName = `${lastName} ${firstName}`.trim()
+            return fullName.includes(patientTerm) ||
+              reversedName.includes(patientTerm) ||
+              normalizeSearch(p.telephone).includes(patientTerm)
+          }
+        )
+      }
+      if (caseTerm) {
+        filtered = filtered.filter((p) => normalizeSearch(p.cas_specifique).includes(caseTerm))
+      }
+    } else if (searchTerm) {
+      const term = normalizeSearch(searchTerm)
       filtered = filtered.filter(
-        (p) =>
-          p.nom?.toLowerCase().includes(term) ||
-          p.prenom?.toLowerCase().includes(term) ||
-          p.telephone?.includes(term)
+        (p) => {
+          const lastName = normalizeSearch(p.nom)
+          const firstName = normalizeSearch(p.prenom)
+          const fullName = `${firstName} ${lastName}`.trim()
+          const reversedName = `${lastName} ${firstName}`.trim()
+          return fullName.includes(term) ||
+            reversedName.includes(term) ||
+            normalizeSearch(p.telephone).includes(term) ||
+            normalizeSearch(p.cas_specifique).includes(term)
+        }
       )
     }
 
     if (statusFilter)  filtered = filtered.filter((p) => p.statut_dossier === statusFilter)
     if (typeCasFilter) filtered = filtered.filter((p) => p.type_de_cas    === typeCasFilter)
-    if (contactFilter) filtered = filtered.filter((p) => p.contact         === contactFilter)
+    if (contactFilter) filtered = filtered.filter((p) => p.contact === contactFilter)
+    if (ctoFilter) filtered = filtered.filter((p) => p.cto === (ctoFilter === "Oui"))
 
     filtered.sort((a, b) => {
       if (sortField === "date" || sortField === "created_at") {
@@ -192,7 +233,7 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       // Only reset to page 1 if current page is now out of bounds
       return prevPage > newTotalPages ? 1 : prevPage
     })
-  }, [searchTerm, statusFilter, typeCasFilter, contactFilter, sortField, sortOrder, patients])
+  }, [searchTerm, patientSearchTerm, specificCaseSearchTerm, searchMode, statusFilter, typeCasFilter, contactFilter, ctoFilter, sortField, sortOrder, patients])
 
   const totalPages = Math.ceil(filteredPatients.length / itemsPerPage)
   const paginatedPatients = filteredPatients.slice(
@@ -286,6 +327,8 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
         telephone:        submittedData.telephone        || null,
         date:             submittedData.date             || null,
         type_de_cas:      submittedData.type_de_cas      || "Non défini",
+        cto:              submittedData.cto === true,
+        cas_specifique:   submittedData.cas_specifique   || null,
         contact:          submittedData.contact          || "À appeler",
         statut_dossier:   submittedData.statut_dossier   || "Dossier en préparation",
         pieces_manquantes: submittedData.pieces_manquantes || null,
@@ -323,6 +366,8 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
       telephone:        submittedData.telephone        || null,
       date:             submittedData.date             || null,
       type_de_cas:      submittedData.type_de_cas      ?? null,
+      cto:              submittedData.cto === true,
+      cas_specifique:   submittedData.cas_specifique   || null,
       contact:          submittedData.contact          ?? null,
       statut_dossier:   submittedData.statut_dossier   ?? null,
       pieces_manquantes: submittedData.pieces_manquantes || null,
@@ -412,10 +457,10 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-              Patients
+              {pageTitle}
             </h1>
             <p className="text-slate-500 mt-1">
-              Gérez tous vos patients et leurs dossiers médicaux
+              {pageDescription}
             </p>
           </div>
           <button
@@ -442,12 +487,28 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Rechercher par nom, prénom ou téléphone..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={searchMode === "cas-specifiques"
+                  ? "Rechercher un patient..."
+                  : "Rechercher par nom, prénom, téléphone ou cas spécifique..."}
+                value={searchMode === "cas-specifiques" ? patientSearchTerm : searchTerm}
+                onChange={(e) => searchMode === "cas-specifiques"
+                  ? setPatientSearchTerm(e.target.value)
+                  : setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 transition text-slate-900 font-medium placeholder-slate-500"
               />
             </div>
+            {searchMode === "cas-specifiques" && (
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher un cas : IVUS, OCT, bifurcation..."
+                  value={specificCaseSearchTerm}
+                  onChange={(e) => setSpecificCaseSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition text-slate-900 font-medium placeholder-violet-500"
+                />
+              </div>
+            )}
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition ${
@@ -456,12 +517,12 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
             >
               <Filter size={16} />
               Filtres
-              {(statusFilter || typeCasFilter || contactFilter) && (
+              {(statusFilter || typeCasFilter || contactFilter || ctoFilter) && (
                 <span className="w-2 h-2 bg-cyan-600 rounded-full"></span>
               )}
             </button>
             <button
-              onClick={() => { setStatusFilter(""); setTypeCasFilter(""); setContactFilter(""); setSearchTerm("") }}
+              onClick={() => { setStatusFilter(""); setTypeCasFilter(""); setContactFilter(""); setCtoFilter(""); setSearchTerm(""); setPatientSearchTerm(""); setSpecificCaseSearchTerm("") }}
               className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 transition"
             >
               <RefreshCw size={16} />
@@ -470,7 +531,7 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
           </div>
 
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100">
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Statut dossier</label>
                 <select
@@ -502,6 +563,18 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
                 >
                   <option value="">Tous</option>
                   {CONTACT_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">CTO</label>
+                <select
+                  value={ctoFilter}
+                  onChange={(e) => setCtoFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm"
+                >
+                  <option value="">Tous</option>
+                  <option value="Oui">Oui</option>
+                  <option value="Non">Non</option>
                 </select>
               </div>
             </div>
@@ -580,6 +653,10 @@ export default function PatientsClient({ initialPatients }: PatientsClientProps)
                         <div>
                           <p className="font-semibold text-slate-800">{patient.nom} {patient.prenom}</p>
                           <p className="text-xs text-slate-400">{patient.age} ans • ID: {patient.id?.slice(0, 8)}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {patient.cto && <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">CTO</span>}
+                          {patient.cas_specifique && <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-bold">{patient.cas_specifique}</span>}
                         </div>
                       </div>
                     </td>
@@ -948,6 +1025,27 @@ function PatientModal({
             >
               {CONTACT_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
             </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <label className="flex items-center gap-3 p-3 bg-rose-50 border border-rose-200 rounded-lg cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.cto === true}
+                onChange={(e) => setFormData({ ...formData, cto: e.target.checked })}
+                className="h-4 w-4 accent-rose-600"
+              />
+              <span className="text-sm font-semibold text-rose-800">Lésion CTO</span>
+            </label>
+            <div>
+              <label className="text-sm font-semibold text-slate-700">Cas spécifique</label>
+              <input
+                value={formData.cas_specifique || ""}
+                onChange={(e) => setFormData({ ...formData, cas_specifique: e.target.value })}
+                placeholder="Ex. IVUS, OCT, bifurcation..."
+                className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium"
+              />
+            </div>
           </div>
 
           <div>

@@ -13,6 +13,8 @@ import {
   UserCircle2,
   LogOut,
   Activity,
+  FileWarning,
+  CalendarClock,
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen
@@ -80,6 +82,27 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             label="Patients"
             href="/dashboard/patients"
             active={pathname.startsWith('/dashboard/patients')}
+            isCollapsed={isCollapsed}
+          />
+          <NavItem
+            icon={<CalendarClock size={20} />}
+            label="ATL à faire"
+            href="/dashboard/atl-a-faire"
+            active={pathname.startsWith('/dashboard/atl-a-faire')}
+            isCollapsed={isCollapsed}
+          />
+          <NavItem
+            icon={<Activity size={20} />}
+            label="Patients CTO"
+            href="/dashboard/cto"
+            active={pathname.startsWith('/dashboard/cto')}
+            isCollapsed={isCollapsed}
+          />
+          <NavItem
+            icon={<FileWarning size={20} />}
+            label="Cas spécifiques"
+            href="/dashboard/cas-specifiques"
+            active={pathname.startsWith('/dashboard/cas-specifiques')}
             isCollapsed={isCollapsed}
           />
           <div className="pt-4 mt-2 border-t border-slate-100">

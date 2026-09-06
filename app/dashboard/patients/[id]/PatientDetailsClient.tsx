@@ -22,7 +22,7 @@ import {
   Trash2,
   Loader2,
   Pencil,
-  X,
+  Tag,
 } from "lucide-react"
 
 interface PatientDetailsClientProps {
@@ -136,7 +136,7 @@ function InlineField({ value, onChange, multiline, placeholder = "—", type = "
         onClick={() => setEditing(true)}
         className={`group relative w-full text-left rounded-lg px-2 py-1.5 -mx-2 hover:bg-cyan-50 transition-colors duration-150 ${className}`}
       >
-        <span className={value ? "text-slate-700 font-medium" : "text-slate-400 italic"}>
+        <span className={value ? "text-slate-700 font-medium break-words" : "text-slate-400 italic"}>
           {value || placeholder}
         </span>
         <span className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -180,12 +180,12 @@ interface ColorSelectProps {
 function ColorSelect({ value, options, colors, onChange, disabled }: ColorSelectProps) {
   const color = colors[value] ?? "bg-slate-500 text-white"
   return (
-    <div className="relative inline-flex">
+    <div className="relative block w-full">
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg text-sm font-semibold cursor-pointer
+        className={`w-full h-10 appearance-none pl-3 pr-8 rounded-lg text-sm font-semibold cursor-pointer
           border-0 focus:outline-none focus:ring-2 focus:ring-white/40 shadow-sm transition-all
           disabled:opacity-60 disabled:cursor-not-allowed ${color}`}
       >
@@ -195,7 +195,7 @@ function ColorSelect({ value, options, colors, onChange, disabled }: ColorSelect
           </option>
         ))}
       </select>
-      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-70 text-xs">▾</span>
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 opacity-70 text-xs">▾</span>
     </div>
   )
 }
@@ -205,7 +205,9 @@ function ColorSelect({ value, options, colors, onChange, disabled }: ColorSelect
 function InfoRow({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0 group">
-      <div className="w-7 text-slate-300 pt-0.5 group-hover:text-cyan-400 transition-colors">{icon}</div>
+      <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-300 shrink-0 mt-0.5 group-hover:bg-cyan-50 group-hover:text-cyan-500 transition-colors">
+        {icon}
+      </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
         {children}
@@ -229,6 +231,8 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
 
   // Merge live patient view with pending dirty changes
   const live = { ...patient, ...dirty } as Patient
+
+  const initials = `${(live.prenom?.trim()?.[0] ?? "")}${(live.nom?.trim()?.[0] ?? "")}`.toUpperCase()
 
   const patch = useCallback((field: keyof Patient, value: unknown) => {
     setDirty((prev) => {
@@ -284,7 +288,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
   }, [isDirty, saving, dirty])
 
   // Instant-save for badge-selects (also marks dirty so user can batch if desired)
-  const handleInstantField = async (field: keyof Patient, value: string) => {
+  const handleInstantField = async (field: keyof Patient, value: unknown) => {
     patch(field, value)
     // Optimistically update live view immediately
     setPatient((prev) => ({ ...prev, [field]: value }))
@@ -336,6 +340,8 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
         ["Date de RDV", formatDate(live.date)],
         ["Médecin référant", live.referring_doctor || "—"],
         ["Type de cas", live.type_de_cas || "—"],
+        ["CTO", live.cto ? "Oui" : "Non"],
+        ["Cas spécifique", live.cas_specifique || "—"],
         ["Statut du dossier", live.statut_dossier || "—"],
         ["Statut de contact", live.contact || "—"],
       ],
@@ -384,26 +390,29 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-100/40">
-      <div className={`p-6 max-w-7xl mx-auto transition-[padding] duration-300 ${isDirty ? "pb-24" : ""}`}>
 
-        {/* ── Top bar ── */}
-        <div className="flex items-center justify-between mb-6 gap-3">
+      {/* ── Sticky top action bar ── */}
+      <div className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
           <button
             onClick={() => router.back()}
             className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all duration-150 shrink-0"
           >
             <ArrowLeft size={18} />
-            Retour
+            <span className="hidden sm:inline">Retour</span>
           </button>
 
-          {/* Center: unsaved changes pill — replaces the hint text */}
-          <div className={`flex items-center gap-2 transition-all duration-300 ${isDirty ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-            <span className="text-xs text-slate-500 hidden sm:block">Modifications non enregistrées</span>
+          {/* Save / discard — only appears while there are unsaved changes */}
+          <div className={`flex items-center gap-2 flex-wrap justify-center transition-all duration-300 ${isDirty ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+              <span className="hidden sm:inline">Modifications non enregistrées</span>
+            </span>
             <button
               onClick={handleDiscard}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-sm transition disabled:opacity-50"
+              title="Annuler les modifications (Ctrl + Z)"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-sm transition disabled:opacity-50"
             >
               <RotateCcw size={12} />
               Annuler
@@ -411,7 +420,8 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-60"
+              title="Enregistrer (Ctrl + Entrée)"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-60"
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
               {saving ? "Enregistrement…" : "Enregistrer"}
@@ -424,9 +434,12 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
             className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-all duration-150 shadow-sm disabled:opacity-60 shrink-0"
           >
             {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-            Supprimer
+            <span className="hidden sm:inline">Supprimer</span>
           </button>
         </div>
+      </div>
+
+      <div className="p-6 pb-16 max-w-7xl mx-auto">
 
         {/* ── Grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -438,33 +451,33 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
               <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-5">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0">
-                    <User size={30} className="text-white" />
+                  <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0 text-white font-bold text-lg">
+                    {initials || <User size={28} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     {/* Nom + Prénom inline editable in header */}
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-3 flex-wrap items-baseline">
                       <input
                         defaultValue={live.nom ?? ""}
                         onBlur={(e) => patch("nom", e.target.value)}
                         placeholder="Nom"
                         className="bg-transparent border-b border-white/40 text-white text-xl font-bold placeholder-white/50
-                          focus:outline-none focus:border-white w-32 pb-0.5 transition-colors"
+                          focus:outline-none focus:border-white flex-1 min-w-[110px] max-w-[220px] pb-0.5 transition-colors"
                       />
                       <input
                         defaultValue={live.prenom ?? ""}
                         onBlur={(e) => patch("prenom", e.target.value)}
                         placeholder="Prénom"
                         className="bg-transparent border-b border-white/40 text-white text-xl font-bold placeholder-white/50
-                          focus:outline-none focus:border-white w-36 pb-0.5 transition-colors"
+                          focus:outline-none focus:border-white flex-1 min-w-[110px] max-w-[220px] pb-0.5 transition-colors"
                       />
                     </div>
-                    <p className="text-cyan-100 text-sm mt-1">ID: {live.id?.slice(0, 8)}</p>
+                    <p className="text-cyan-100 text-sm mt-1.5">ID: {live.id?.slice(0, 8)}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-1">
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6">
                 <InfoRow label="Âge" icon={<User size={15} />}>
                   <InlineField
                     value={live.age?.toString() ?? ""}
@@ -502,23 +515,58 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
               </div>
             </div>
 
-            {/* Status badges row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { label: "Type de cas", field: "type_de_cas" as keyof Patient, options: TYPE_CAS_OPTIONS, colors: typeCasColors, fallback: "Non défini" },
-                { label: "Statut dossier", field: "statut_dossier" as keyof Patient, options: STATUT_DOSSIER_OPTIONS, colors: statusColors, fallback: "Statut inconnu" },
-                { label: "Statut contact", field: "contact" as keyof Patient, options: CONTACT_STATUS_OPTIONS, colors: contactColors, fallback: "À appeler" },
-              ].map(({ label, field, options, colors, fallback }) => (
-                <div key={field} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{label}</p>
-                  <ColorSelect
-                    value={(live[field] as string) || fallback}
-                    options={options}
-                    colors={colors}
-                    onChange={(v) => handleInstantField(field, v)}
+            {/* Classification & suivi — all badges grouped in one consistent card */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+                <Tag size={17} className="text-indigo-600" />
+                <h2 className="font-semibold text-slate-800">Classification &amp; suivi</h2>
+              </div>
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  { label: "Type de cas", field: "type_de_cas" as keyof Patient, options: TYPE_CAS_OPTIONS, colors: typeCasColors, fallback: "Non défini" },
+                  { label: "Statut dossier", field: "statut_dossier" as keyof Patient, options: STATUT_DOSSIER_OPTIONS, colors: statusColors, fallback: "Statut inconnu" },
+                  { label: "Statut contact", field: "contact" as keyof Patient, options: CONTACT_STATUS_OPTIONS, colors: contactColors, fallback: "À appeler" },
+                ].map(({ label, field, options, colors, fallback }) => (
+                  <div key={field} className="bg-slate-50 rounded-xl border border-slate-100 p-3.5 flex flex-col">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{label}</p>
+                    <ColorSelect
+                      value={(live[field] as string) || fallback}
+                      options={options}
+                      colors={colors}
+                      onChange={(v) => handleInstantField(field, v)}
+                    />
+                  </div>
+                ))}
+
+                <div className="bg-slate-50 rounded-xl border border-slate-100 p-3.5 flex flex-col">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">CTO</p>
+                  <button
+                    type="button"
+                    onClick={() => handleInstantField("cto", !live.cto)}
+                    className={`w-full h-10 flex items-center justify-between gap-2 px-3 rounded-lg text-sm font-semibold shadow-sm transition-colors ${
+                      live.cto ? "bg-rose-700 text-white" : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                    }`}
+                  >
+                    <span>{live.cto ? "Lésion CTO" : "Pas de CTO"}</span>
+                    <span className={`w-8 h-4 rounded-full relative shrink-0 transition-colors ${live.cto ? "bg-white/30" : "bg-white"}`}>
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${
+                          live.cto ? "translate-x-4 bg-white" : "bg-slate-400"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </div>
+
+                <div className="bg-slate-50 rounded-xl border border-slate-100 p-3.5 sm:col-span-2 lg:col-span-4">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cas spécifique</p>
+                  <InlineField
+                    value={live.cas_specifique || ""}
+                    onChange={(value) => patch("cas_specifique", value || null)}
+                    placeholder="Ex. IVUS, OCT, bifurcation..."
                   />
                 </div>
-              ))}
+              </div>
             </div>
 
             {/* Text sections */}
@@ -583,21 +631,27 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                   onClick={() => { window.location.href = `tel:${live.telephone}` }}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-green-50 hover:text-green-700 transition-all duration-150 text-sm font-medium"
                 >
-                  <Phone size={17} className="text-green-600" />
+                  <span className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+                    <Phone size={15} className="text-green-600" />
+                  </span>
                   Appeler le patient
                 </button>
                 <button
                   onClick={() => { navigator.clipboard.writeText(live.id || ""); alert("ID copié !") }}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-all duration-150 text-sm font-medium"
                 >
-                  <FileText size={17} className="text-blue-600" />
+                  <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                    <FileText size={15} className="text-blue-600" />
+                  </span>
                   Copier l'ID patient
                 </button>
                 <button
                   onClick={handlePrintPdf}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition-all duration-150 text-sm font-medium"
                 >
-                  <Printer size={17} className="text-purple-600" />
+                  <span className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
+                    <Printer size={15} className="text-purple-600" />
+                  </span>
                   Imprimer le dossier
                 </button>
               </div>
@@ -605,7 +659,9 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
 
             {/* Doctor card */}
             <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-2xl p-5 text-white shadow-sm">
-              <Stethoscope size={22} className="mb-3 opacity-70" />
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center mb-3">
+                <Stethoscope size={20} className="opacity-80" />
+              </div>
               <h3 className="font-semibold text-lg leading-tight">Dr. Abdelhamid Mayou</h3>
               <p className="text-slate-300 text-sm mt-1">Médecin traitant</p>
               <div className="mt-4 pt-4 border-t border-slate-600/60">
@@ -620,43 +676,9 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
         </div>
       </div>
 
-      {/* ── Floating save pill — bottom-right corner, never overlaps content ── */}
-      <div
-        className={`fixed bottom-6 right-6 z-40 flex items-center gap-2 transition-all duration-300 ease-in-out ${
-          isDirty
-            ? "opacity-100 translate-y-0 pointer-events-auto"
-            : "opacity-0 translate-y-4 pointer-events-none"
-        }`}
-      >
-        <button
-          onClick={handleDiscard}
-          disabled={saving}
-          title="Annuler les modifications (Ctrl + Z)"
-          className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-lg transition disabled:opacity-50"
-        >
-          <RotateCcw size={13} />
-          <span>Annuler</span>
-          <kbd className="ml-1 px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 rounded-md leading-none text-slate-400">⌃Z</kbd>
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          title="Enregistrer (Ctrl + Entrée)"
-          className="flex items-center gap-1.5 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold rounded-xl shadow-lg transition disabled:opacity-60"
-        >
-          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-          <span>{saving ? "Enregistrement…" : "Enregistrer"}</span>
-          {!saving && (
-            <kbd className="ml-1 px-1.5 py-0.5 text-[10px] font-mono bg-white/20 rounded-md leading-none">
-              ⌃↵
-            </kbd>
-          )}
-        </button>
-      </div>
-
       {/* ── Save success toast ── */}
       <div
-        className={`fixed bottom-20 right-6 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl
+        className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl
           transition-all duration-500 ${saveSuccess ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}
       >
         <CheckCircle size={18} />
