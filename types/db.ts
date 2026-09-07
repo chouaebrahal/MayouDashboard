@@ -29,6 +29,7 @@ export type Patient = {
   date: string | null; // PostgreSQL DATE → string
   type_de_cas: string | null;
   cto: boolean;
+  calcification_coronaire: boolean;
   cas_specifique: string | null;
   contact: string | null;
   statut_dossier: string | null;

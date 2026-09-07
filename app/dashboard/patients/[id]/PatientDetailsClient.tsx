@@ -341,6 +341,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
         ["Médecin référant", live.referring_doctor || "—"],
         ["Type de cas", live.type_de_cas || "—"],
         ["CTO", live.cto ? "Oui" : "Non"],
+        ["Calcification coronaire", live.calcification_coronaire ? "Oui" : "Non"],
         ["Cas spécifique", live.cas_specifique || "—"],
         ["Statut du dossier", live.statut_dossier || "—"],
         ["Statut de contact", live.contact || "—"],
@@ -552,6 +553,26 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                       <span
                         className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${
                           live.cto ? "translate-x-4 bg-white" : "bg-slate-400"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </div>
+
+                <div className="bg-slate-50 rounded-xl border border-slate-100 p-3.5 flex flex-col">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Calcification</p>
+                  <button
+                    type="button"
+                    onClick={() => handleInstantField("calcification_coronaire", !live.calcification_coronaire)}
+                    className={`w-full h-10 flex items-center justify-between gap-2 px-3 rounded-lg text-sm font-semibold shadow-sm transition-colors ${
+                      live.calcification_coronaire ? "bg-amber-600 text-white" : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                    }`}
+                  >
+                    <span>{live.calcification_coronaire ? "Il y a une calcification" : "Aucune calcification"}</span>
+                    <span className={`w-8 h-4 rounded-full relative shrink-0 transition-colors ${live.calcification_coronaire ? "bg-white/30" : "bg-white"}`}>
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${
+                          live.calcification_coronaire ? "translate-x-4 bg-white" : "bg-slate-400"
                         }`}
                       />
                     </span>

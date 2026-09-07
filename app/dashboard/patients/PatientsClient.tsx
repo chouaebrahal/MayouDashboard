@@ -106,6 +106,7 @@ const EMPTY_FORM: Partial<Patient> = {
   date: "",
   type_de_cas: "Non défini",
   cto: false,
+  calcification_coronaire: false,
   cas_specifique: "",
   contact: "À appeler",
   statut_dossier: "Dossier en préparation",
@@ -131,6 +132,7 @@ export default function PatientsClient({
   const [statusFilter, setStatusFilter] = useState<string>("")
   const [typeCasFilter, setTypeCasFilter] = useState<string>("")
   const [ctoFilter, setCtoFilter] = useState<string>("")
+  const [calcificationFilter, setCalcificationFilter] = useState<string>("")
   const [contactFilter, setContactFilter] = useState<string>("")
   const [sortField, setSortField] = useState<SortField>("created_at")
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
@@ -207,6 +209,7 @@ export default function PatientsClient({
     if (typeCasFilter) filtered = filtered.filter((p) => p.type_de_cas    === typeCasFilter)
     if (contactFilter) filtered = filtered.filter((p) => p.contact === contactFilter)
     if (ctoFilter) filtered = filtered.filter((p) => p.cto === (ctoFilter === "Oui"))
+    if (calcificationFilter) filtered = filtered.filter((p) => p.calcification_coronaire === (calcificationFilter === "Oui"))
 
     filtered.sort((a, b) => {
       if (sortField === "date" || sortField === "created_at") {
@@ -233,7 +236,7 @@ export default function PatientsClient({
       // Only reset to page 1 if current page is now out of bounds
       return prevPage > newTotalPages ? 1 : prevPage
     })
-  }, [searchTerm, patientSearchTerm, specificCaseSearchTerm, searchMode, statusFilter, typeCasFilter, contactFilter, ctoFilter, sortField, sortOrder, patients])
+  }, [searchTerm, patientSearchTerm, specificCaseSearchTerm, searchMode, statusFilter, typeCasFilter, contactFilter, ctoFilter, calcificationFilter, sortField, sortOrder, patients])
 
   const totalPages = Math.ceil(filteredPatients.length / itemsPerPage)
   const paginatedPatients = filteredPatients.slice(
@@ -328,6 +331,7 @@ export default function PatientsClient({
         date:             submittedData.date             || null,
         type_de_cas:      submittedData.type_de_cas      || "Non défini",
         cto:              submittedData.cto === true,
+        calcification_coronaire: submittedData.calcification_coronaire === true,
         cas_specifique:   submittedData.cas_specifique   || null,
         contact:          submittedData.contact          || "À appeler",
         statut_dossier:   submittedData.statut_dossier   || "Dossier en préparation",
@@ -367,6 +371,7 @@ export default function PatientsClient({
       date:             submittedData.date             || null,
       type_de_cas:      submittedData.type_de_cas      ?? null,
       cto:              submittedData.cto === true,
+      calcification_coronaire: submittedData.calcification_coronaire === true,
       cas_specifique:   submittedData.cas_specifique   || null,
       contact:          submittedData.contact          ?? null,
       statut_dossier:   submittedData.statut_dossier   ?? null,
@@ -517,12 +522,12 @@ export default function PatientsClient({
             >
               <Filter size={16} />
               Filtres
-              {(statusFilter || typeCasFilter || contactFilter || ctoFilter) && (
+              {(statusFilter || typeCasFilter || contactFilter || ctoFilter || calcificationFilter) && (
                 <span className="w-2 h-2 bg-cyan-600 rounded-full"></span>
               )}
             </button>
             <button
-              onClick={() => { setStatusFilter(""); setTypeCasFilter(""); setContactFilter(""); setCtoFilter(""); setSearchTerm(""); setPatientSearchTerm(""); setSpecificCaseSearchTerm("") }}
+              onClick={() => { setStatusFilter(""); setTypeCasFilter(""); setContactFilter(""); setCtoFilter(""); setCalcificationFilter(""); setSearchTerm(""); setPatientSearchTerm(""); setSpecificCaseSearchTerm("") }}
               className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 transition"
             >
               <RefreshCw size={16} />
@@ -570,6 +575,18 @@ export default function PatientsClient({
                 <select
                   value={ctoFilter}
                   onChange={(e) => setCtoFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm"
+                >
+                  <option value="">Tous</option>
+                  <option value="Oui">Oui</option>
+                  <option value="Non">Non</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">Calcification coronaire</label>
+                <select
+                  value={calcificationFilter}
+                  onChange={(e) => setCalcificationFilter(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm"
                 >
                   <option value="">Tous</option>
@@ -656,6 +673,7 @@ export default function PatientsClient({
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {patient.cto && <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">CTO</span>}
+                          {patient.calcification_coronaire && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-bold">CALCIFICATION</span>}
                           {patient.cas_specifique && <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-bold">{patient.cas_specifique}</span>}
                         </div>
                       </div>
@@ -1036,6 +1054,15 @@ function PatientModal({
                 className="h-4 w-4 accent-rose-600"
               />
               <span className="text-sm font-semibold text-rose-800">Lésion CTO</span>
+            </label>
+            <label className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.calcification_coronaire === true}
+                onChange={(e) => setFormData({ ...formData, calcification_coronaire: e.target.checked })}
+                className="h-4 w-4 accent-amber-600"
+              />
+              <span className="text-sm font-semibold text-amber-800">Calcification coronaire</span>
             </label>
             <div>
               <label className="text-sm font-semibold text-slate-700">Cas spécifique</label>

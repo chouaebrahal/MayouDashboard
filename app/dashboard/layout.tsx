@@ -13,6 +13,7 @@ import {
   UserCircle2,
   LogOut,
   Activity,
+  CircleDot,
   FileWarning,
   CalendarClock,
   Sparkles,
@@ -96,6 +97,13 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             label="Patients CTO"
             href="/dashboard/cto"
             active={pathname.startsWith('/dashboard/cto')}
+            isCollapsed={isCollapsed}
+          />
+          <NavItem
+            icon={<CircleDot size={20} />}
+            label="Patients calcification"
+            href="/dashboard/calcifications"
+            active={pathname.startsWith('/dashboard/calcifications')}
             isCollapsed={isCollapsed}
           />
           <NavItem
