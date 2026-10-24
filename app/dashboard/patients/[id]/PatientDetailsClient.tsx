@@ -23,6 +23,7 @@ import {
   Loader2,
   Pencil,
   Tag,
+  MessageCircle,
 } from "lucide-react"
 
 interface PatientDetailsClientProps {
@@ -38,6 +39,7 @@ const STATUT_DOSSIER_OPTIONS = [
   "Accord de l'assurance",
   "Transmis à l'assurance",
   "Dossier en préparation",
+  "Dossier déposé",
   "Statut inconnu",
 ]
 
@@ -69,6 +71,7 @@ const statusColors: Record<string, string> = {
   "Accord de l'assurance": "bg-green-700 text-white",
   "Transmis à l'assurance": "bg-blue-700 text-white",
   "Dossier en préparation": "bg-purple-700 text-white",
+  "Dossier déposé": "bg-teal-700 text-white",
   "Statut inconnu": "bg-gray-500 text-white",
 }
 
@@ -337,7 +340,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
       body: [
         ["Âge", live.age ? `${live.age} ans` : "—"],
         ["Téléphone", live.telephone || "—"],
-        ["Date de RDV", formatDate(live.date)],
+        ["Date d'intervention", formatDate(live.date)],
         ["Médecin référant", live.referring_doctor || "—"],
         ["Type de cas", live.type_de_cas || "—"],
         ["CTO", live.cto ? "Oui" : "Non"],
@@ -495,7 +498,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                     placeholder="Non renseigné"
                   />
                 </InfoRow>
-                <InfoRow label="Date de rendez-vous" icon={<Calendar size={15} />}>
+                <InfoRow label="Date d'intervention" icon={<Calendar size={15} />}>
                   <InlineField
                     value={live.date ?? ""}
                     onChange={(v) => patch("date", v)}
@@ -657,6 +660,20 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                   </span>
                   Appeler le patient
                 </button>
+                {live.telephone && (
+                  <button
+                    onClick={() => { 
+                      const msg = encodeURIComponent(`Bonjour ${live.prenom} ${live.nom}, concernant votre dossier médical - Clinique Les Babors. Veuillez nous contacter pour finaliser votre dossier.`)
+                      window.open(`https://wa.me/${live.telephone!.replace(/\s+/g, '').replace(/^\+/, '')}?text=${msg}`, '_blank')
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-150 text-sm font-medium"
+                  >
+                    <span className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                      <MessageCircle size={15} className="text-emerald-600" />
+                    </span>
+                    Envoyer message WhatsApp
+                  </button>
+                )}
                 <button
                   onClick={() => { navigator.clipboard.writeText(live.id || ""); alert("ID copié !") }}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-all duration-150 text-sm font-medium"

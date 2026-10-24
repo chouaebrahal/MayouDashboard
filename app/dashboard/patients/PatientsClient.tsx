@@ -47,6 +47,7 @@ const STATUT_DOSSIER_OPTIONS = [
   "Accord de l'assurance",
   "Transmis à l'assurance",
   "Dossier en préparation",
+  "Dossier déposé",
   "Statut inconnu",
 ]
 
@@ -76,6 +77,7 @@ const statusColors: Record<string, string> = {
   "Accord de l'assurance": "bg-green-700 text-white border-green-800",
   "Transmis à l'assurance": "bg-blue-700 text-white border-blue-800",
   "Dossier en préparation": "bg-purple-700 text-white border-purple-800",
+  "Dossier déposé": "bg-teal-700 text-white border-teal-800",
   "Statut inconnu": "bg-gray-600 text-white border-gray-700",
 }
 
@@ -356,6 +358,23 @@ export default function PatientsClient({
     setShowAddModal(false)
     setSuccessMsg("Patient ajouté avec succès")
     setTimeout(() => setSuccessMsg(null), 2000)
+    
+    // Notify every device that activated notifications (doctor + admins),
+    // through the FCM "doctors" topic. No database table is needed.
+    try {
+      await fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: "doctors",
+          title: "Nouveau patient ajouté",
+          body: `${submittedData.prenom} ${submittedData.nom} a été ajouté au système`,
+          data: { link: `/dashboard/patients/${data.id}` },
+        }),
+      })
+    } catch (e) {
+      console.error("Failed to send notifications", e)
+    }
   }
 
   // ── Edit ─────────────────────────────────────────────────────────────────────
@@ -631,7 +650,7 @@ export default function PatientsClient({
                       { label: "Type de cas",   field: "type_de_cas"   },
                       { label: "Statut dossier",field: "statut_dossier"},
                       { label: "Contact status",field: null            },
-                      { label: "Date RDV",      field: "date"          },
+                      { label: "Date intervention", field: "date"          },
                       { label: "Créé le",       field: "created_at"    },
                     ] as { label: string; field: SortField | null }[]
                   ).map(({ label, field }) => (
@@ -775,7 +794,7 @@ export default function PatientsClient({
                       </div>
                     </td>
 
-                    {/* Date RDV */}
+                    {/* Date d'intervention */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 text-sm text-slate-600">
                         <Calendar size={12} className="text-slate-400" />
@@ -991,7 +1010,7 @@ function PatientModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-semibold text-slate-700">Date de rendez-vous</label>
+              <label className="text-sm font-semibold text-slate-700">Date d'intervention</label>
               <input
                 type="date"
                 value={formData.date || ""}

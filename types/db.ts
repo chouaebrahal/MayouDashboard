@@ -6,6 +6,7 @@ export type Admin = {
   email: string | null;
   username: string | null;
   password: string | null;
+  fcm_token?: string | null;
 };
 
 export type Doctor = {
@@ -17,6 +18,7 @@ export type Doctor = {
   telephone: string | null;
   password: string | null;
   username: string | null;
+  fcm_token?: string | null;
 };
 
 export type Patient = {

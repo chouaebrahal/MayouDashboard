@@ -4,6 +4,8 @@
 import { useState, useEffect } from "react"
 import { useUser } from "@/app/components/UserProvider"
 import { supabase } from "@/lib/supabaseClient"
+import { requestForToken } from "@/lib/firebaseClient"
+import { registerPushDevice } from "@/lib/fcmTokens"
 import {
   User,
   Mail,
@@ -14,6 +16,8 @@ import {
   Save,
   Shield,
   Bell,
+  BellRing,
+  Send,
   Moon,
   Sun,
   Globe,
@@ -59,6 +63,150 @@ export default function SettingsClient() {
     smsNotifications: false,
     appointmentReminders: true
   })
+
+  const [pushToken, setPushToken] = useState<string | null>(null)
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">("default")
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushMessage, setPushMessage] = useState<string | null>(null)
+  const [pushError, setPushError] = useState<string | null>(null)
+  const [swStatus, setSwStatus] = useState<string>("vérification…")
+  const [lastTestResult, setLastTestResult] = useState<string | null>(null)
+
+  const refreshServiceWorkerStatus = async () => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      setSwStatus("non supporté")
+      return
+    }
+    try {
+      const registration = await navigator.serviceWorker.getRegistration("/")
+      if (!registration) {
+        setSwStatus("non enregistré")
+        return
+      }
+      const state =
+        registration.active?.state ||
+        registration.waiting?.state ||
+        registration.installing?.state ||
+        "inconnu"
+      setSwStatus(`enregistré (${state})`)
+    } catch {
+      setSwStatus("erreur de vérification")
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+      setPushPermission("unsupported")
+      setSwStatus("non supporté")
+      return
+    }
+    setPushPermission(Notification.permission)
+    void refreshServiceWorkerStatus()
+
+    // If permission was already granted, retrieve the token so the
+    // diagnostic panel can show it without clicking "Activer".
+    if (Notification.permission === "granted") {
+      void requestForToken().then((token) => {
+        if (token) {
+          setPushToken(token)
+          console.info("[FCM] Token de cet appareil :", token)
+        }
+      })
+    }
+  }, [])
+
+  const handleEnablePush = async () => {
+    if (!user) return
+    setPushLoading(true)
+    setPushError(null)
+    setPushMessage(null)
+    try {
+      const token = await requestForToken()
+      if (!token) {
+        setPushPermission(typeof Notification !== "undefined" ? Notification.permission : "unsupported")
+        setPushError(
+          "Impossible d'activer les notifications. Vérifiez que vous avez autorisé les notifications (et sur iOS : ajoutez l'application à l'écran d'accueil)."
+        )
+        return
+      }
+      const saved = await registerPushDevice(user.id, user.role, token)
+      setPushToken(token)
+      setPushPermission("granted")
+      void refreshServiceWorkerStatus()
+      console.info("[FCM] Token de cet appareil :", token)
+      setPushMessage(
+        saved.subscribed
+          ? "Notifications activées sur cet appareil."
+          : "Token obtenu, mais l'abonnement au canal de notifications a échoué. Vérifiez la configuration Firebase."
+      )
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  const handleTestPush = async () => {
+    setPushLoading(true)
+    setPushError(null)
+    setPushMessage(null)
+    setLastTestResult(null)
+    try {
+      const token = pushToken || (await requestForToken())
+      if (!token) {
+        setPushError("Aucun token disponible. Activez d'abord les notifications sur cet appareil.")
+        return
+      }
+      setPushToken(token)
+      const res = await fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          title: "Test MayouDashboard",
+          body: "Les notifications push fonctionnent sur cet appareil ✅",
+          data: { link: "/dashboard" },
+        }),
+      })
+      const json = await res.json()
+      setLastTestResult(`HTTP ${res.status} — ${json.response || json.error || JSON.stringify(json)}`)
+      if (!res.ok) throw new Error(json.error || "Erreur d'envoi")
+      setPushMessage(
+        "Firebase a accepté la demande d'envoi. Le message peut arriver avec quelques secondes de retard. Utilisez le bouton « Notification locale » pour vérifier l'affichage du navigateur."
+      )
+    } catch (e) {
+      setPushError(e instanceof Error ? e.message : "Erreur lors de l'envoi du test")
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  const handleLocalNotification = async () => {
+    setPushError(null)
+    setPushMessage(null)
+    try {
+      if (typeof Notification === "undefined" || !("serviceWorker" in navigator)) {
+        setPushError("Ce navigateur ne supporte pas les notifications.")
+        return
+      }
+      if (Notification.permission !== "granted") {
+        setPushError("Autorisez d'abord les notifications dans le navigateur.")
+        return
+      }
+      const registration = await navigator.serviceWorker.ready
+      await registration.showNotification("Test local — MayouDashboard", {
+        body: "Si vous voyez cette notification, le navigateur et le système les affichent bien.",
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+      })
+      setPushMessage(
+        "Notification locale affichée. Si elle n'apparaît pas, vérifiez les réglages de notifications de Windows/macOS/Android (mode Ne pas déranger, notifications Chrome, etc.)."
+      )
+      void refreshServiceWorkerStatus()
+    } catch (e) {
+      setPushError(
+        e instanceof Error ? e.message : "Impossible d'afficher la notification locale"
+      )
+    }
+  }
 
   useEffect(() => {
     if (user) {
@@ -422,6 +570,83 @@ export default function SettingsClient() {
                 </div>
               </div>
               <div className="p-6 space-y-4">
+                <div className="rounded-xl border border-cyan-100 bg-cyan-50/60 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="flex items-center gap-2 font-semibold text-slate-800">
+                        <BellRing size={16} className="text-cyan-700" />
+                        Notifications push (téléphone / navigateur)
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Statut :{" "}
+                        {pushPermission === "granted"
+                          ? "activées sur cet appareil"
+                          : pushPermission === "denied"
+                            ? "refusées dans le navigateur"
+                            : pushPermission === "unsupported"
+                              ? "non supportées par ce navigateur"
+                              : "non activées"}
+                      </p>
+                    </div>
+                    <span
+                      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                        pushPermission === "granted" ? "bg-emerald-500" : "bg-slate-300"
+                      }`}
+                    />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={handleEnablePush}
+                      disabled={pushLoading || pushPermission === "unsupported"}
+                      className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-50"
+                    >
+                      {pushLoading ? <Loader2 size={15} className="animate-spin" /> : <BellRing size={15} />}
+                      Activer cet appareil
+                    </button>
+                    <button
+                      onClick={handleTestPush}
+                      disabled={pushLoading || pushPermission === "unsupported"}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Send size={15} />
+                      Envoyer un test
+                    </button>
+                    <button
+                      onClick={handleLocalNotification}
+                      disabled={pushLoading || pushPermission === "unsupported"}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Bell size={15} />
+                      Notification locale
+                    </button>
+                  </div>
+
+                  {pushMessage && <p className="mt-2 text-xs text-emerald-700">{pushMessage}</p>}
+                  {pushError && <p className="mt-2 text-xs text-rose-600">{pushError}</p>}
+
+                  <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
+                    <p>
+                      <span className="font-semibold text-slate-700">Permission :</span>{" "}
+                      {pushPermission}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-700">Service worker :</span>{" "}
+                      {swStatus}
+                    </p>
+                    <p className="break-all">
+                      <span className="font-semibold text-slate-700">Token :</span>{" "}
+                      {pushToken ? `${pushToken.slice(0, 24)}…` : "non obtenu"}
+                    </p>
+                    {lastTestResult && (
+                      <p className="break-all">
+                        <span className="font-semibold text-slate-700">Dernier test :</span>{" "}
+                        {lastTestResult}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <label className="flex items-center justify-between cursor-pointer">
                   <div className="flex items-center gap-3">
                     <Mail size={16} className="text-slate-500" />
@@ -455,7 +680,7 @@ export default function SettingsClient() {
                 <label className="flex items-center justify-between cursor-pointer">
                   <div className="flex items-center gap-3">
                     <Calendar size={16} className="text-slate-500" />
-                    <span className="text-slate-700 font-medium">Rappels de rendez-vous</span>
+                    <span className="text-slate-700 font-medium">Rappels d'intervention</span>
                   </div>
                   <div className="relative">
                     <input

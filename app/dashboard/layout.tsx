@@ -18,7 +18,9 @@ import {
   CalendarClock,
   Sparkles,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  ClockAlert,
+  AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -111,6 +113,20 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             label="Cas spécifiques"
             href="/dashboard/cas-specifiques"
             active={pathname.startsWith('/dashboard/cas-specifiques')}
+            isCollapsed={isCollapsed}
+          />
+          <NavItem
+            icon={<ClockAlert size={20} />}
+            label="Dossiers en attente > 10j"
+            href="/dashboard/dossiers-en-attente"
+            active={pathname === '/dashboard/dossiers-en-attente'}
+            isCollapsed={isCollapsed}
+          />
+          <NavItem
+            icon={<AlertTriangle size={20} />}
+            label="Dossiers en attente > 15j"
+            href="/dashboard/dossiers-en-attente-15j"
+            active={pathname.startsWith('/dashboard/dossiers-en-attente-15j')}
             isCollapsed={isCollapsed}
           />
           <div className="pt-4 mt-2 border-t border-slate-100">
@@ -223,11 +239,15 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   );
 }
 
+import NotificationProvider from '@/app/components/NotificationProvider';
+
 // ── Outer layout — provides UserProvider scoped to /dashboard/* only ────────
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <UserProvider>
-      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+      <NotificationProvider>
+        <DashboardLayoutInner>{children}</DashboardLayoutInner>
+      </NotificationProvider>
     </UserProvider>
   );
 }

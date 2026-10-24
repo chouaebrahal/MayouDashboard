@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabaseClient"
 import { Patient, Doctor, Admin } from "@/types/db"
+import { isPendingDossierOverDays } from "@/lib/pendingDossiers"
 import {
   Users,
   Stethoscope,
@@ -36,6 +37,7 @@ import {
   PieChart,
   Download,
   RefreshCw,
+  ClockAlert,
 } from "lucide-react"
 
 interface DashboardClientProps {
@@ -75,6 +77,17 @@ export default function DashboardClient({
   const totalDoctors = doctors.length
   const totalAdmins = admins.length
 
+  // Dossiers en attente > 10 jours (calculés depuis la date d'intervention,
+  // ou la date de saisie si aucune intervention n'est renseignée)
+  const todayDate = new Date()
+  const dossiersEnAttentePlus10Jours = patients.filter((p) =>
+    isPendingDossierOverDays(p, 10, todayDate)
+  )
+  // Palier critique : plus de 15 jours après l'intervention
+  const dossiersEnAttentePlus15Jours = patients.filter((p) =>
+    isPendingDossierOverDays(p, 15, todayDate)
+  )
+
   // Statistiques des dossiers
   const dossiersComplets = patients.filter(p => p.statut_dossier === "Dossier complet").length
   const dossiersEnAttente = patients.filter(p => p.statut_dossier === "Dossier en préparation").length
@@ -92,7 +105,7 @@ export default function DashboardClient({
   const aAppeler = patients.filter(p => p.contact === "À appeler").length
   const nonJoignable = patients.filter(p => p.contact === "N'est pas joignable").length
 
-  // Statistiques des rendez-vous
+  // Statistiques des interventions
   const today = new Date().toISOString().split('T')[0]
   const rendezVousAujourdhui = patients.filter(p => p.date === today).length
   
@@ -247,11 +260,75 @@ export default function DashboardClient({
           />
         </div>
 
+        {/* Alert - Dossiers en attente > 10 jours */}
+        {dossiersEnAttentePlus10Jours.length > 0 && (
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200 rounded-2xl p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="bg-rose-100 p-3 rounded-2xl">
+                    <ClockAlert size={24} className="text-rose-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-rose-900 flex items-center gap-2">
+                      <AlertCircle size={18} />
+                      Dossiers en attente depuis plus de 10 jours
+                    </h3>
+                    <p className="text-rose-700 mt-1">
+                      {dossiersEnAttentePlus10Jours.length} patient(s) avec statut "Statut inconnu" ou "Dossier en préparation" sans dépôt de dossier plus de 10 jours après l'intervention. À relancer !
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href="/dashboard/dossiers-en-attente"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-all shadow-lg shadow-rose-500/30"
+                >
+                  <ClockAlert size={18} />
+                  Voir la liste
+                  <ChevronRight size={16} />
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Alert - Dossiers en attente > 15 jours (priorité) */}
+        {dossiersEnAttentePlus15Jours.length > 0 && (
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-red-50 to-rose-50 border border-red-300 rounded-2xl p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="bg-red-100 p-3 rounded-2xl">
+                    <AlertCircle size={24} className="text-red-700" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-red-900 flex items-center gap-2">
+                      <ClockAlert size={18} />
+                      Dossiers critiques : plus de 15 jours
+                    </h3>
+                    <p className="text-red-700 mt-1">
+                      {dossiersEnAttentePlus15Jours.length} patient(s) parmi les dossiers en attente dépassent 15 jours après l'intervention, sans dépôt de dossier. Relance urgente !
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href="/dashboard/dossiers-en-attente-15j"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-red-700 text-white rounded-xl font-medium hover:bg-red-800 transition-all shadow-lg shadow-red-500/30"
+                >
+                  <ClockAlert size={18} />
+                  Voir la liste prioritaire
+                  <ChevronRight size={16} />
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Second Row Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-slate-500 font-medium">Rendez-vous</p>
+              <p className="text-sm text-slate-500 font-medium">Interventions</p>
               <CalendarDays size={18} className="text-slate-400" />
             </div>
             <div className="flex items-baseline gap-2">
@@ -505,7 +582,7 @@ export default function DashboardClient({
               </button>
               <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition">
                 <CalendarDays size={16} />
-                Voir les rendez-vous
+                Voir les interventions
               </button>
               <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition">
                 <Download size={16} />
