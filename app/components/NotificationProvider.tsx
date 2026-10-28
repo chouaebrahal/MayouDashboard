@@ -111,6 +111,9 @@ export default function NotificationProvider({ children }: { children: React.Rea
       // while the page is in the foreground. Show one through the active
       // service worker as well as the in-app toast.
       if (Notification.permission === "granted" && "serviceWorker" in navigator) {
+        const notificationTag = payload.data?.patientId
+          ? `pending-dossier-${payload.data.patientId}-${payload.data.threshold || "reminder"}`
+          : "mayoudashboard-foreground"
         void navigator.serviceWorker.ready
           .then((registration) =>
             registration.showNotification(title, {
@@ -118,7 +121,7 @@ export default function NotificationProvider({ children }: { children: React.Rea
               icon: "/icon-192.png",
               badge: "/icon-192.png",
               data: { link: link || "/dashboard" },
-              tag: "mayoudashboard-foreground",
+              tag: notificationTag,
             })
           )
           .catch((error) =>
