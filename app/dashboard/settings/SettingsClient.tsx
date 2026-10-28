@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react"
 import { useUser } from "@/app/components/UserProvider"
 import { supabase } from "@/lib/supabaseClient"
-import { requestForToken } from "@/lib/firebaseClient"
+import { refreshForToken, requestForToken } from "@/lib/firebaseClient"
 import { registerPushDevice } from "@/lib/fcmTokens"
 import {
   User,
@@ -34,6 +34,8 @@ import {
   LogOut,
   X
 } from "lucide-react"
+
+const FCM_RECEIPT_TIMEOUT_MS = 30_000
 
 export default function SettingsClient() {
   const { user, logout } = useUser()
@@ -109,7 +111,6 @@ export default function SettingsClient() {
       void requestForToken().then((token) => {
         if (token) {
           setPushToken(token)
-          console.info("[FCM] Token de cet appareil :", token)
         }
       })
     }
@@ -133,7 +134,6 @@ export default function SettingsClient() {
       setPushToken(token)
       setPushPermission("granted")
       void refreshServiceWorkerStatus()
-      console.info("[FCM] Token de cet appareil :", token)
       setPushMessage(
         saved.subscribed
           ? "Notifications activées sur cet appareil."
@@ -149,32 +149,182 @@ export default function SettingsClient() {
     setPushError(null)
     setPushMessage(null)
     setLastTestResult(null)
+    const diagnosticId = globalThis.crypto.randomUUID()
+    let deliveryTimer: number | undefined
+    let removeDeliveryListener = () => {}
+    const browserReceived = new Promise<"foreground" | "service-worker">((resolve) => {
+      const handleFcmMessage = (event: Event) => {
+        const detail = (event as CustomEvent<{
+          data?: Record<string, string | null>
+          delivery?: "foreground" | "service-worker"
+        }>).detail
+        if (detail?.data?.diagnosticId !== diagnosticId) return
+        removeDeliveryListener()
+        resolve(detail.delivery || "foreground")
+      }
+
+      window.addEventListener("mayou:fcm-message", handleFcmMessage)
+      removeDeliveryListener = () =>
+        window.removeEventListener("mayou:fcm-message", handleFcmMessage)
+    })
     try {
-      const token = pushToken || (await requestForToken())
+      // Ask FCM for the current token on every test. A displayed token can be
+      // revoked or rotated after it was first loaded.
+      let token = await requestForToken()
       if (!token) {
         setPushError("Aucun token disponible. Activez d'abord les notifications sur cet appareil.")
         return
       }
       setPushToken(token)
-      const res = await fetch("/api/notify", {
+      const sendTest = (targetToken: string) => fetch("/api/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
+          token: targetToken,
           title: "Test MayouDashboard",
           body: "Les notifications push fonctionnent sur cet appareil ✅",
-          data: { link: "/dashboard" },
+          data: { link: "/dashboard", diagnosticId },
         }),
       })
-      const json = await res.json()
-      setLastTestResult(`HTTP ${res.status} — ${json.response || json.error || JSON.stringify(json)}`)
-      if (!res.ok) throw new Error(json.error || "Erreur d'envoi")
+      let res = await sendTest(token)
+      let responseText = await res.text()
+      let json: {
+        response?: string
+        error?: string
+        code?: string
+        success?: boolean
+        target?: string
+        projectId?: string
+        payloadType?: string
+      }
+      try {
+        json = JSON.parse(responseText) as typeof json
+      } catch {
+        json = { error: responseText || "Réponse serveur illisible" }
+      }
+
+      if (
+        res.status === 410 &&
+        (json.code === "messaging/registration-token-not-registered" ||
+          json.code === "messaging/invalid-registration-token")
+      ) {
+        const refreshedToken = await refreshForToken()
+        if (!refreshedToken) {
+          throw new Error("Le token FCM était expiré et n'a pas pu être renouvelé. Réactivez les notifications sur cet appareil.")
+        }
+        token = refreshedToken
+        setPushToken(token)
+        if (user) await registerPushDevice(user.id, user.role, token)
+        res = await sendTest(token)
+        responseText = await res.text()
+        try {
+          json = JSON.parse(responseText) as typeof json
+        } catch {
+          json = { error: responseText || "Réponse serveur illisible" }
+        }
+      }
+
+      const result = [
+        json.target && `cible=${json.target}`,
+        json.projectId && `projet=${json.projectId}`,
+        json.payloadType && `payload=${json.payloadType}`,
+        json.response || json.error || (!json.success ? responseText : undefined),
+      ]
+        .filter(Boolean)
+        .join(" · ") || "Réponse vide"
+      setLastTestResult(
+        `HTTP ${res.status} · token ${token.slice(0, 12)}… · ${result}`
+      )
+      console.info("[FCM] Button test send result", {
+        diagnosticId,
+        httpStatus: res.status,
+        tokenPrefix: token.slice(0, 12),
+        messageId: json.response || null,
+        projectId: json.projectId || null,
+      })
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || `L'envoi a échoué (HTTP ${res.status})`)
+      }
+      let received = await Promise.race([
+        browserReceived,
+        new Promise<null>((resolve) => {
+          deliveryTimer = window.setTimeout(
+            () => resolve(null),
+            FCM_RECEIPT_TIMEOUT_MS,
+          )
+        }),
+      ])
+      let refreshedAndRetried = false
+
+      // FCM can accept a recently rotated token but fail to deliver to its
+      // browser subscription. If there's no receipt, rotate once and retry.
+      if (received === null) {
+        const refreshedToken = await refreshForToken()
+        if (refreshedToken && refreshedToken !== token) {
+          refreshedAndRetried = true
+          token = refreshedToken
+          setPushToken(token)
+          if (user) await registerPushDevice(user.id, user.role, token)
+
+          const retryResponse = await sendTest(token)
+          const retryText = await retryResponse.text()
+          try {
+            json = JSON.parse(retryText) as typeof json
+          } catch {
+            json = { error: retryText || "Réponse serveur illisible" }
+          }
+
+          if (retryResponse.ok && json.success) {
+            received = await Promise.race([
+              browserReceived,
+              new Promise<null>((resolve) => {
+                deliveryTimer = window.setTimeout(
+                  () => resolve(null),
+                  FCM_RECEIPT_TIMEOUT_MS,
+                )
+              }),
+            ])
+          } else {
+            setPushError(
+              json.error || `Le nouvel envoi a échoué (HTTP ${retryResponse.status})`,
+            )
+          }
+        }
+      }
+
+      setLastTestResult((current) =>
+        `${current} · ${received === "foreground" ? "reçu par le listener de la page" : received === "service-worker" ? "reçu en arrière-plan par le service worker" : `aucun accusé navigateur sous ${FCM_RECEIPT_TIMEOUT_MS / 1000} s`}${refreshedAndRetried ? " · token renouvelé et nouvel essai effectué" : ""}`
+      )
+      if (received === null) {
+        const registration = await navigator.serviceWorker.getRegistration("/")
+        const subscription = await registration?.pushManager.getSubscription()
+        const subscriptionEndpoint = subscription?.endpoint || null
+        const endpointProjectMatch = subscriptionEndpoint?.includes(
+          "fcm.googleapis.com"
+        ) || false
+        setLastTestResult((current) =>
+          `${current} · permission=${Notification.permission} · sw=${registration?.active?.state || "absent"} · pushSubscription=${subscription ? "present" : "absent"} · endpointIsFcm=${endpointProjectMatch}`
+        )
+        console.warn("[FCM] No browser receipt for button test", {
+          diagnosticId,
+          serviceWorkerState: registration?.active?.state || "absent",
+          pushSubscriptionPresent: Boolean(subscription),
+          endpointIsFcm: endpointProjectMatch,
+          notificationPermission: Notification.permission,
+        })
+      }
       setPushMessage(
-        "Firebase a accepté la demande d'envoi. Le message peut arriver avec quelques secondes de retard. Utilisez le bouton « Notification locale » pour vérifier l'affichage du navigateur."
+        received === "foreground"
+          ? "Firebase a accepté l'envoi et le listener FCM de cette page l'a reçu."
+          : received === "service-worker"
+            ? "Firebase a livré le test au service worker en arrière-plan. Cette page n'était pas traitée comme active par FCM au moment de la réception."
+            : `Firebase a accepté l'envoi, mais ni la page ni le service worker n'ont confirmé sa réception sous ${FCM_RECEIPT_TIMEOUT_MS / 1000} s. Vérifiez les erreurs de console et l'état de l'abonnement/push dans le navigateur.`
       )
     } catch (e) {
       setPushError(e instanceof Error ? e.message : "Erreur lors de l'envoi du test")
     } finally {
+      removeDeliveryListener()
+      if (deliveryTimer !== undefined) window.clearTimeout(deliveryTimer)
       setPushLoading(false)
     }
   }

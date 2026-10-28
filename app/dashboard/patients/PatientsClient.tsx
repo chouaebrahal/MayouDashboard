@@ -362,7 +362,7 @@ export default function PatientsClient({
     // Notify every device that activated notifications (doctor + admins),
     // through the FCM "doctors" topic. No database table is needed.
     try {
-      await fetch("/api/notify", {
+      const response = await fetch("/api/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -372,6 +372,10 @@ export default function PatientsClient({
           data: { link: `/dashboard/patients/${data.id}` },
         }),
       })
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        console.error("Notification send failed:", result.error || response.statusText)
+      }
     } catch (e) {
       console.error("Failed to send notifications", e)
     }

@@ -69,6 +69,23 @@ export default function NotificationProvider({ children }: { children: React.Rea
   }, [user, enableNotifications])
 
   useEffect(() => {
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "MAYOU_FCM_BACKGROUND_RECEIVED") return
+
+      console.info("[FCM] Background message received by service worker", {
+        diagnosticId: event.data.data?.diagnosticId || null,
+      })
+      window.dispatchEvent(
+        new CustomEvent("mayou:fcm-message", {
+          detail: {
+            data: event.data.data || {},
+            delivery: "service-worker",
+          },
+        })
+      )
+    }
+
+    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage)
     let unsubscribe: (() => void) | null = null
     let cancelled = false
 
@@ -83,6 +100,11 @@ export default function NotificationProvider({ children }: { children: React.Rea
         hasData: Boolean(payload.data),
         dataKeys: payload.data ? Object.keys(payload.data) : [],
       })
+      window.dispatchEvent(
+        new CustomEvent("mayou:fcm-message", {
+          detail: { data: payload.data, delivery: "foreground" },
+        })
+      )
       setNotification({ title, body, link })
 
       // FCM does not display notification messages as system notifications
@@ -124,6 +146,7 @@ export default function NotificationProvider({ children }: { children: React.Rea
     return () => {
       cancelled = true
       unsubscribe?.()
+      navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage)
       if (toastTimer.current) window.clearTimeout(toastTimer.current)
     }
   }, [])
