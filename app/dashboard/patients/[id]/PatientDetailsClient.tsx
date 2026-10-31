@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import ConfirmDialog from "@/app/components/ConfirmDialog"
+import Select from "@/app/components/Select"
 import { supabase } from "@/lib/supabaseClient"
 import { Patient } from "@/types/db"
 import jsPDF from "jspdf"
@@ -24,6 +26,7 @@ import {
   Pencil,
   Tag,
   MessageCircle,
+  ChevronDown,
 } from "lucide-react"
 
 interface PatientDetailsClientProps {
@@ -80,7 +83,7 @@ const typeCasColors: Record<string, string> = {
   "Chirurgie": "bg-indigo-700 text-white",
   "Traitement médical": "bg-cyan-700 text-white",
   "Terminé / ATL réalisé": "bg-emerald-700 text-white",
-  "ATL à faire": "bg-orange-600 text-white",
+  "ATL à faire": "bg-red-700 text-white",
   "Urgence": "bg-rose-700 text-white",
   "Consultation": "bg-blue-700 text-white",
   "Suivi post-op": "bg-teal-700 text-white",
@@ -183,23 +186,16 @@ interface ColorSelectProps {
 function ColorSelect({ value, options, colors, onChange, disabled }: ColorSelectProps) {
   const color = colors[value] ?? "bg-slate-500 text-white"
   return (
-    <div className="relative block w-full">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className={`w-full h-10 appearance-none pl-3 pr-8 rounded-lg text-sm font-semibold cursor-pointer
-          border-0 focus:outline-none focus:ring-2 focus:ring-white/40 shadow-sm transition-all
-          disabled:opacity-60 disabled:cursor-not-allowed ${color}`}
-      >
-        {options.map((opt) => (
-          <option key={opt} value={opt} className="bg-slate-800 text-white">
-            {opt}
-          </option>
-        ))}
-      </select>
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 opacity-70 text-xs">▾</span>
-    </div>
+    <Select
+      value={value}
+      options={options}
+      onChange={onChange}
+      disabled={disabled}
+      variant="colored"
+      triggerClassName={color}
+      size="sm"
+      className="w-full"
+    />
   )
 }
 
@@ -227,7 +223,9 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
   const [dirty, setDirty] = useState<Partial<Patient>>({})   // only changed fields
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [copySuccess, setCopySuccess] = useState(false)
   const successTimer = useRef<NodeJS.Timeout | null>(null)
 
   const isDirty = Object.keys(dirty).length > 0
@@ -302,11 +300,12 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
     router.refresh()
   }
 
-  const handleDelete = async () => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce patient ? Cette action est irréversible.")) return
+  const handleDelete = () => setConfirmOpen(true)
+  const performDelete = async () => {
     setDeleting(true)
     const { error } = await supabase.from("patients").delete().eq("id", patient.id)
     if (!error) {
+      setConfirmOpen(false)
       router.push("/dashboard/patients")
       router.refresh()
     } else {
@@ -393,11 +392,11 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-100/40">
+    <div className="min-h-dvh app-background">
 
       {/* ── Sticky top action bar ── */}
-      <div className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3 lg:px-6">
           <button
             onClick={() => router.back()}
             className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all duration-150 shrink-0"
@@ -443,7 +442,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
         </div>
       </div>
 
-      <div className="p-6 pb-16 max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl px-3 pb-16 pt-4 sm:px-5 sm:pt-6 lg:px-6">
 
         {/* ── Grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -453,27 +452,25 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
 
             {/* Header card */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-5">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0 text-white font-bold text-lg">
+              <div className="bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-4 sm:px-6 sm:py-5">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 text-base font-bold text-white backdrop-blur-sm sm:h-16 sm:w-16 sm:rounded-2xl sm:text-lg">
                     {initials || <User size={28} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     {/* Nom + Prénom inline editable in header */}
-                    <div className="flex gap-3 flex-wrap items-baseline">
+                    <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
                       <input
                         defaultValue={live.nom ?? ""}
                         onBlur={(e) => patch("nom", e.target.value)}
                         placeholder="Nom"
-                        className="bg-transparent border-b border-white/40 text-white text-xl font-bold placeholder-white/50
-                          focus:outline-none focus:border-white flex-1 min-w-[110px] max-w-[220px] pb-0.5 transition-colors"
+                        className="min-w-0 max-w-full flex-1 border-b border-white/40 bg-transparent pb-0.5 text-lg font-bold text-white placeholder-white/70 transition-colors focus:border-white focus:outline-none sm:min-w-[110px] sm:max-w-[220px] sm:text-xl"
                       />
                       <input
                         defaultValue={live.prenom ?? ""}
                         onBlur={(e) => patch("prenom", e.target.value)}
                         placeholder="Prénom"
-                        className="bg-transparent border-b border-white/40 text-white text-xl font-bold placeholder-white/50
-                          focus:outline-none focus:border-white flex-1 min-w-[110px] max-w-[220px] pb-0.5 transition-colors"
+                        className="min-w-0 max-w-full flex-1 border-b border-white/40 bg-transparent pb-0.5 text-lg font-bold text-white placeholder-white/70 transition-colors focus:border-white focus:outline-none sm:min-w-[110px] sm:max-w-[220px] sm:text-xl"
                       />
                     </div>
                     <p className="text-cyan-100 text-sm mt-1.5">ID: {live.id?.slice(0, 8)}</p>
@@ -481,7 +478,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                 </div>
               </div>
 
-              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6">
+              <div className="grid grid-cols-1 gap-x-6 px-4 py-4 sm:grid-cols-2 sm:p-6">
                 <InfoRow label="Âge" icon={<User size={15} />}>
                   <InlineField
                     value={live.age?.toString() ?? ""}
@@ -525,7 +522,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                 <Tag size={17} className="text-indigo-600" />
                 <h2 className="font-semibold text-slate-800">Classification &amp; suivi</h2>
               </div>
-              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="classification-grid">
                 {[
                   { label: "Type de cas", field: "type_de_cas" as keyof Patient, options: TYPE_CAS_OPTIONS, colors: typeCasColors, fallback: "Non défini" },
                   { label: "Statut dossier", field: "statut_dossier" as keyof Patient, options: STATUT_DOSSIER_OPTIONS, colors: statusColors, fallback: "Statut inconnu" },
@@ -582,7 +579,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                   </button>
                 </div>
 
-                <div className="bg-slate-50 rounded-xl border border-slate-100 p-3.5 sm:col-span-2 lg:col-span-4">
+                <div className="bg-slate-50 rounded-xl border border-slate-100 p-3.5 sm:col-span-2 lg:col-span-3">
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cas spécifique</p>
                   <InlineField
                     value={live.cas_specifique || ""}
@@ -604,7 +601,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                   {icon}
                   <h2 className="font-semibold text-slate-800">{title}</h2>
                 </div>
-                <div className="p-5">
+                <div className="p-4 sm:p-5">
                   <InlineField
                     value={live[field] as string}
                     onChange={(v) => patch(field, v)}
@@ -625,7 +622,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                 <Video size={17} className="text-purple-600" />
                 <h2 className="font-semibold text-slate-800">Vidéo / Document</h2>
               </div>
-              <div className="p-5 space-y-3">
+              <div className="space-y-3 p-4 sm:p-5">
                 <InlineField
                   value={live.video_url}
                   onChange={(v) => patch("video_url", v)}
@@ -650,7 +647,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
               <div className="px-6 py-4 border-b border-slate-100">
                 <h2 className="font-semibold text-slate-800">Actions rapides</h2>
               </div>
-              <div className="p-4 space-y-2">
+              <div className="space-y-2 p-3 sm:p-4">
                 <button
                   onClick={() => { window.location.href = `tel:${live.telephone}` }}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-green-50 hover:text-green-700 transition-all duration-150 text-sm font-medium"
@@ -675,7 +672,7 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
                   </button>
                 )}
                 <button
-                  onClick={() => { navigator.clipboard.writeText(live.id || ""); alert("ID copié !") }}
+                  onClick={() => { navigator.clipboard.writeText(live.id || ""); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000) }}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-all duration-150 text-sm font-medium"
                 >
                   <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
@@ -695,29 +692,50 @@ export default function PatientDetailsClient({ patient: initialPatient }: Patien
               </div>
             </div>
 
-            {/* Doctor card */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-2xl p-5 text-white shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center mb-3">
+            {/* Doctor card — intentionally dark in both themes, so it uses
+                fixed colors instead of theme-mapped slate tokens (which flip
+                to near-white in dark mode). */}
+            <div className="rounded-2xl bg-gradient-to-br from-[#1f2937] to-[#374151] p-5 text-white shadow-sm">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
                 <Stethoscope size={20} className="opacity-80" />
               </div>
-              <h3 className="font-semibold text-lg leading-tight">Dr. Abdelhamid Mayou</h3>
-              <p className="text-slate-300 text-sm mt-1">Médecin traitant</p>
-              <div className="mt-4 pt-4 border-t border-slate-600/60">
-                <p className="text-xs text-slate-400 flex items-center gap-1.5">
+              <h3 className="text-lg font-semibold leading-tight">Dr. Abdelhamid Mayou</h3>
+              <p className="mt-1 text-sm text-white/70">Médecin traitant</p>
+              <div className="mt-4 border-t border-white/15 pt-4">
+                <p className="flex items-center gap-1.5 text-xs text-white/60">
                   <Clock size={11} />
                   Créé le
                 </p>
-                <p className="text-sm text-slate-200 mt-0.5">{formatDateTime(live.created_at)}</p>
+                <p className="mt-0.5 text-sm text-white/90">{formatDateTime(live.created_at)}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Save success toast ── */}
+      {/* ── Confirm delete dialog ── */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Supprimer ce patient ?"
+        message="Cette action est irréversible. Le dossier et toutes ses données seront définitivement supprimés."
+        confirmLabel="Supprimer"
+        danger
+        loading={deleting}
+        onConfirm={performDelete}
+        onCancel={() => !deleting && setConfirmOpen(false)}
+      />
+
+      {/* ── Copy ID toast ── */}
       <div
-        className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl
-          transition-all duration-500 ${saveSuccess ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}
+        className={`fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-3 z-50 flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-2xl bg-slate-800 px-4 py-3 text-white shadow-xl transition-all duration-500 sm:bottom-[5.5rem] sm:right-6 sm:max-w-sm sm:px-5
+          ${copySuccess ? "opacity-100 translate-y-0" : "pointer-events-none translate-y-4 opacity-0"}`}
+      >
+        <CheckCircle size={18} />
+        <span className="text-sm font-semibold">ID patient copié</span>
+      </div>
+      <div
+        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-3 z-50 flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-2xl bg-emerald-600 px-4 py-3 text-white shadow-xl transition-all duration-500 sm:bottom-6 sm:right-6 sm:max-w-sm sm:px-5
+          ${saveSuccess ? "opacity-100 translate-y-0" : "pointer-events-none translate-y-4 opacity-0"}`}
       >
         <CheckCircle size={18} />
         <span className="text-sm font-semibold">Dossier enregistré avec succès</span>

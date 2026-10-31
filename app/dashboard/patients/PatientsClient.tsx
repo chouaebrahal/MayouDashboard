@@ -4,6 +4,8 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
+import ConfirmDialog from "@/app/components/ConfirmDialog"
+import Select from "@/app/components/Select"
 import { Patient } from "@/types/db"
 import {
   Search,
@@ -86,7 +88,7 @@ const typeCasColors: Record<string, string> = {
   "Chirurgie": "bg-indigo-700 text-white",
   "Traitement médical": "bg-cyan-700 text-white",
   "Terminé / ATL réalisé": "bg-emerald-700 text-white",
-  "ATL à faire": "bg-orange-700 text-white",
+  "ATL à faire": "bg-red-700 text-white",
   "Urgence": "bg-rose-700 text-white",
   "Consultation": "bg-blue-700 text-white",
   "Suivi post-op": "bg-teal-700 text-white",
@@ -147,6 +149,8 @@ export default function PatientsClient({
   const [showFilters, setShowFilters] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // ── Sync with server when cache invalidates ──────────────────────────────────
   useEffect(() => {
@@ -428,7 +432,12 @@ export default function PatientsClient({
 
   // ── Delete ───────────────────────────────────────────────────────────────────
   const handleDeletePatient = async (patientId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce patient ?")) return
+    setConfirmDeleteId(patientId)
+  }
+  const performDeletePatient = async () => {
+    if (!confirmDeleteId) return
+    const patientId = confirmDeleteId
+    setDeletingId(patientId)
 
     // Optimistic remove
     const backup = [...patients]
@@ -443,6 +452,8 @@ export default function PatientsClient({
       setSuccessMsg("Patient supprimé")
       setTimeout(() => setSuccessMsg(null), 2000)
     }
+    setDeletingId(null)
+    setConfirmDeleteId(null)
   }
 
   const handleViewPatient = (patientId: string) => {
@@ -479,7 +490,7 @@ export default function PatientsClient({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-100/40">
+    <div className="min-h-screen app-background">
       <div className="p-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
@@ -507,6 +518,18 @@ export default function PatientsClient({
             <span className="text-sm font-medium">{successMsg}</span>
           </div>
         )}
+
+        {/* Confirm delete dialog */}
+        <ConfirmDialog
+          open={confirmDeleteId !== null}
+          title="Supprimer ce patient ?"
+          message="Cette action est irréversible. Le patient et toutes ses données seront définitivement supprimés."
+          confirmLabel="Supprimer"
+          danger
+          loading={deletingId !== null}
+          onConfirm={performDeletePatient}
+          onCancel={() => !deletingId && setConfirmDeleteId(null)}
+        />
 
         {/* Filters Bar */}
         <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-6 shadow-sm">
@@ -559,63 +582,51 @@ export default function PatientsClient({
           </div>
 
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100 [&>*]:min-w-0">
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Statut dossier</label>
-                <select
+                <Select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm"
-                >
-                  <option value="">Tous</option>
-                  {STATUT_DOSSIER_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
+                  options={[{ value: "", label: "Tous" }, ...STATUT_DOSSIER_OPTIONS.map((o) => ({ value: o, label: o }))]}
+                  onChange={setStatusFilter}
+                  size="md"
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Type de cas</label>
-                <select
+                <Select
                   value={typeCasFilter}
-                  onChange={(e) => setTypeCasFilter(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm"
-                >
-                  <option value="">Tous</option>
-                  {TYPE_CAS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
+                  options={[{ value: "", label: "Tous" }, ...TYPE_CAS_OPTIONS.map((o) => ({ value: o, label: o }))]}
+                  onChange={setTypeCasFilter}
+                  size="md"
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Statut contact</label>
-                <select
+                <Select
                   value={contactFilter}
-                  onChange={(e) => setContactFilter(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm"
-                >
-                  <option value="">Tous</option>
-                  {CONTACT_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
+                  options={[{ value: "", label: "Tous" }, ...CONTACT_STATUS_OPTIONS.map((o) => ({ value: o, label: o }))]}
+                  onChange={setContactFilter}
+                  size="md"
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">CTO</label>
-                <select
+                <Select
                   value={ctoFilter}
-                  onChange={(e) => setCtoFilter(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm"
-                >
-                  <option value="">Tous</option>
-                  <option value="Oui">Oui</option>
-                  <option value="Non">Non</option>
-                </select>
+                  options={[{ value: "", label: "Tous" }, { value: "Oui", label: "Oui" }, { value: "Non", label: "Non" }]}
+                  onChange={setCtoFilter}
+                  size="md"
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Calcification coronaire</label>
-                <select
+                <Select
                   value={calcificationFilter}
-                  onChange={(e) => setCalcificationFilter(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium shadow-sm"
-                >
-                  <option value="">Tous</option>
-                  <option value="Oui">Oui</option>
-                  <option value="Non">Non</option>
-                </select>
+                  options={[{ value: "", label: "Tous" }, { value: "Oui", label: "Oui" }, { value: "Non", label: "Non" }]}
+                  onChange={setCalcificationFilter}
+                  size="md"
+                />
               </div>
             </div>
           )}
@@ -928,7 +939,7 @@ function PatientModal({
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div>
               <label className="text-sm font-semibold text-slate-700">Nom *</label>
               <input
@@ -951,7 +962,7 @@ function PatientModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div>
               <div className="flex items-center justify-between">
                 <label className="text-sm font-semibold text-slate-700">Âge</label>
@@ -982,7 +993,7 @@ function PatientModal({
                         setFormData({ ...formData, age })
                       }
                     }}
-                    className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium"
+                    className="app-select mt-1 text-sm max-sm:text-xs"
                   />
                   {formData.age != null && (
                     <p className="text-xs font-semibold text-cyan-700 mt-1.5 ml-1">
@@ -1012,14 +1023,14 @@ function PatientModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div>
               <label className="text-sm font-semibold text-slate-700">Date d'intervention</label>
               <input
                 type="date"
                 value={formData.date || ""}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium"
+                className="app-select mt-1 text-sm max-sm:text-xs"
               />
             </div>
             <div>
@@ -1034,41 +1045,41 @@ function PatientModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <div>
               <label className="text-sm font-semibold text-slate-700">Type de cas</label>
-              <select
+              <Select
                 value={formData.type_de_cas || "Non défini"}
-                onChange={(e) => setFormData({ ...formData, type_de_cas: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium"
-              >
-                {TYPE_CAS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+                options={TYPE_CAS_OPTIONS}
+                onChange={(v) => setFormData({ ...formData, type_de_cas: v })}
+                size="md"
+                className="mt-1"
+              />
             </div>
             <div>
               <label className="text-sm font-semibold text-slate-700">Statut dossier</label>
-              <select
+              <Select
                 value={formData.statut_dossier || "Dossier en préparation"}
-                onChange={(e) => setFormData({ ...formData, statut_dossier: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium"
-              >
-                {STATUT_DOSSIER_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+                options={STATUT_DOSSIER_OPTIONS}
+                onChange={(v) => setFormData({ ...formData, statut_dossier: v })}
+                size="md"
+                className="mt-1"
+              />
             </div>
           </div>
 
           <div>
             <label className="text-sm font-semibold text-slate-700">Statut contact</label>
-            <select
+            <Select
               value={formData.contact || "À appeler"}
-              onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-              className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium"
-            >
-              {CONTACT_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
+              options={CONTACT_STATUS_OPTIONS}
+              onChange={(v) => setFormData({ ...formData, contact: v })}
+              size="md"
+              className="mt-1"
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <label className="flex items-center gap-3 p-3 bg-rose-50 border border-rose-200 rounded-lg cursor-pointer">
               <input
                 type="checkbox"
@@ -1093,7 +1104,7 @@ function PatientModal({
                 value={formData.cas_specifique || ""}
                 onChange={(e) => setFormData({ ...formData, cas_specifique: e.target.value })}
                 placeholder="Ex. IVUS, OCT, bifurcation..."
-                className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-slate-800 font-medium"
+                className="app-select mt-1 text-sm max-sm:text-xs"
               />
             </div>
           </div>

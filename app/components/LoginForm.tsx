@@ -4,6 +4,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
+import ThemeToggle from "./ThemeToggle"
 import { 
   Stethoscope, 
   User, 
@@ -12,7 +13,6 @@ import {
   EyeOff, 
   Shield, 
   Activity,
-  Sparkles,
   AlertCircle,
   Loader2,
   CheckCircle
@@ -35,8 +35,7 @@ export default function LoginForm() {
     setSuccessMessage(null)
 
     try {
-      let user = null
-      let table = userType === "admin" ? "admins" : "doctors"
+      const table = userType === "admin" ? "admins" : "doctors"
 
       // Vérifier les credentials dans la table correspondante
       const { data, error: queryError } = await supabase
@@ -88,189 +87,186 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-100/50 flex items-center justify-center p-4">
+    <main className="app-background relative isolate flex min-h-svh items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
       {/* Background decorative elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-cyan-200/30 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-200/30 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-200/20 rounded-full blur-3xl"></div>
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-cyan-200/30 blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-blue-200/30 blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-200/20 blur-3xl"></div>
       </div>
 
-      <div className="relative w-full max-w-6xl">
-        <div className="grid md:grid-cols-2 gap-0 bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200/60">
-          
-          {/* Left side - Branding */}
-          <div className="bg-gradient-to-br from-cyan-700 via-blue-700 to-indigo-800 p-8 md:p-12 flex flex-col justify-between text-white">
-            <div>
-              <div className="flex items-center gap-3 mb-8">
-                <div className="bg-white/20 p-2.5 rounded-2xl backdrop-blur-sm">
-                  <Stethoscope size={28} className="text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold tracking-tight">MayouDashboard</h1>
-                  <p className="text-cyan-200 text-sm">Système de gestion médicale</p>
-                </div>
-              </div>
-              
-              <div className="space-y-6 mt-12">
-                <div className="flex items-start gap-3">
-                  <div className="bg-white/20 p-2 rounded-xl">
-                    <Shield size={18} className="text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Accès sécurisé</h3>
-                    <p className="text-cyan-100 text-sm">Connexion sécurisée pour administrateurs et médecins</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="bg-white/20 p-2 rounded-xl">
-                    <Activity size={18} className="text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Gestion centralisée</h3>
-                    <p className="text-cyan-100 text-sm">Gérez tous vos patients et dossiers depuis un seul endroit</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="bg-white/20 p-2 rounded-xl">
-                    <Sparkles size={18} className="text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Interface moderne</h3>
-                    <p className="text-cyan-100 text-sm">Une expérience utilisateur fluide et professionnelle</p>
-                  </div>
-                </div>
-              </div>
+      <div className="relative w-full max-w-md">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:rounded-3xl sm:p-8">
+          <ThemeToggle className="absolute right-4 top-4 sm:right-5 sm:top-5" />
+
+          {/* Brand */}
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/25">
+              <Stethoscope size={28} aria-hidden="true" />
             </div>
-            
-            <div className="mt-8 pt-8 border-t border-white/20">
-              <p className="text-cyan-100 text-xs">
-                © 2026 MayouDashboard - Tous droits réservés 
+            <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900">
+              MayouDashboard
+            </h1>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              Système de gestion médicale
+            </p>
+          </div>
+
+          <div className="mt-6 border-t border-slate-200 pt-6">
+            <div className="text-center">
+              <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+                Connexion
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Accédez à votre espace de travail
               </p>
             </div>
-          </div>
 
-          {/* Right side - Login Form */}
-          <div className="p-8 md:p-12 bg-white">
-            <div className="max-w-md mx-auto w-full">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-slate-900">Connexion</h2>
-                <p className="text-slate-600 mt-1 font-medium">Accédez à votre espace de travail</p>
-              </div>
-
-              {/* User Type Toggle */}
-              <div className="flex gap-2 p-1 bg-slate-100 rounded-xl mb-6">
-                <button
-                  type="button"
-                  onClick={() => setUserType("admin")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-                    userType === "admin"
-                      ? "bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <Shield size={16} />
-                  Administrateur
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUserType("doctor")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-                    userType === "doctor"
-                      ? "bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <Stethoscope size={16} />
-                  Médecin
-                </button>
-              </div>
-
-              <form onSubmit={handleLogin} className="space-y-5">
-                {/* Username Field */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                    Nom d'utilisateur
-                  </label>
-                  <div className="relative">
-                    <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition text-slate-900 font-medium placeholder:text-slate-400"
-                      placeholder="Entrez votre nom d'utilisateur"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password Field */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                    Mot de passe
-                  </label>
-                  <div className="relative">
-                    <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-12 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500 transition text-slate-900 font-medium placeholder:text-slate-400"
-                      placeholder="Entrez votre mot de passe"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition"
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Error Message */}
-                {error && (
-                  <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700">
-                    <AlertCircle size={16} />
-                    <span className="text-sm">{error}</span>
-                  </div>
-                )}
-
-                {/* Success Message */}
-                {successMessage && (
-                  <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700">
-                    <CheckCircle size={16} />
-                    <span className="text-sm">{successMessage}</span>
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold rounded-xl shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:scale-[1.02] transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      Connexion...
-                    </>
-                  ) : (
-                    <>
-                      <Activity size={18} />
-                      Se connecter
-                    </>
-                  )}
-                </button>
-
-               
-              </form>
+            {/* User Type Toggle */}
+            <div className="mt-6 flex gap-2 rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => setUserType("admin")}
+                aria-pressed={userType === "admin"}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 font-medium transition-all duration-200 ${
+                  userType === "admin"
+                    ? "bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <Shield size={16} aria-hidden="true" />
+                <span className="hidden sm:inline">Administrateur</span>
+                <span className="sm:hidden">Admin</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserType("doctor")}
+                aria-pressed={userType === "doctor"}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 font-medium transition-all duration-200 ${
+                  userType === "doctor"
+                    ? "bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <Stethoscope size={16} aria-hidden="true" />
+                Médecin
+              </button>
             </div>
+
+            <form onSubmit={handleLogin} className="mt-6 space-y-5">
+              {/* Username Field */}
+              <div>
+                <label
+                  htmlFor="login-username"
+                  className="mb-1.5 block text-sm font-semibold text-slate-800"
+                >
+                  Nom d&apos;utilisateur
+                </label>
+                <div className="relative">
+                  <User
+                    size={18}
+                    aria-hidden="true"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+                  />
+                  <input
+                    id="login-username"
+                    name="username"
+                    type="text"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 font-medium text-slate-900 transition placeholder:text-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                    placeholder="Entrez votre nom d'utilisateur"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label
+                  htmlFor="login-password"
+                  className="mb-1.5 block text-sm font-semibold text-slate-800"
+                >
+                  Mot de passe
+                </label>
+                <div className="relative">
+                  <Lock
+                    size={18}
+                    aria-hidden="true"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+                  />
+                  <input
+                    id="login-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-12 font-medium text-slate-900 transition placeholder:text-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                    placeholder="Entrez votre mot de passe"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                    title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-slate-500 transition hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-600"
+                  >
+                    {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-700"
+                >
+                  <AlertCircle size={16} aria-hidden="true" />
+                  <span className="text-sm">{error}</span>
+                </div>
+              )}
+
+              {/* Success Message */}
+              {successMessage && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-700"
+                >
+                  <CheckCircle size={16} aria-hidden="true" />
+                  <span className="text-sm">{successMessage}</span>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 py-2.5 font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all duration-200 hover:shadow-xl hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-600 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={18} aria-hidden="true" className="animate-spin" />
+                    Connexion...
+                  </>
+                ) : (
+                  <>
+                    <Activity size={18} aria-hidden="true" />
+                    Se connecter
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
+
+        <p className="mt-6 text-center text-xs text-slate-500">
+          © 2026 MayouDashboard — Tous droits réservés
+        </p>
       </div>
-    </div>
+    </main>
   )
 }

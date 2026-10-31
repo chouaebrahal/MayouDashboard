@@ -114,12 +114,6 @@ export async function POST(req: Request) {
         data: toData(data),
         webpush,
       });
-      console.info("[FCM] Direct device send accepted", {
-        diagnosticId: diagnosticId || null,
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        tokenPrefix: targets[0].slice(0, 12),
-        messageId: response,
-      });
       return NextResponse.json(
         {
           success: true,
@@ -161,7 +155,10 @@ export async function POST(req: Request) {
       code === "messaging/registration-token-not-registered" ||
       code === "messaging/invalid-registration-token"
         ? 410
-        : 500;
+        : code === "messaging/mismatched-credential" ||
+            code === "messaging/third-party-auth-error"
+          ? 403
+          : 500;
     return NextResponse.json({ error: message, code }, { status });
   }
 }

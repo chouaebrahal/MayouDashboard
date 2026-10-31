@@ -1,17 +1,18 @@
 // app/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { ThemeProvider } from "./components/ThemeProvider";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "MediDash - Système de gestion médicale",
+  title: "MayouDashboard - Système de gestion médicale",
   description: "Plateforme de gestion pour professionnels de santé",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "MediDash",
+    title: "MayouDashboard",
     statusBarStyle: "default",
   },
   icons: {
@@ -28,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="fr" data-scroll-behavior="smooth">
       <body className={inter.className}>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

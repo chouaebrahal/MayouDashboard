@@ -3,8 +3,12 @@ import { supabase } from "@/lib/supabaseClient"
 import { notFound } from "next/navigation"
 import PatientDetailsClient from "./PatientDetailsClient"
 
-export default async function PatientDetailsPage({ params }: { params: { id: string } }) {
-  const {id} = await params
+export default async function PatientDetailsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params
   const { data: patient, error } = await supabase
     .from("patients")
     .select("*")

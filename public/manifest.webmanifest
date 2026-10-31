@@ -1,6 +1,6 @@
 {
-  "name": "MediDash - MayouDashboard",
-  "short_name": "MediDash",
+  "name": "MayouDashboard",
+  "short_name": "MayouDashboard",
   "description": "Plateforme de gestion pour professionnels de santé",
   "start_url": "/dashboard",
   "scope": "/",

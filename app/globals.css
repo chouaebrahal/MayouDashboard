@@ -1,20 +1,211 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --background: #f7f9fc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: #e3e8ef;
+  --foreground: #1f2937;
+  --secondary: #6b7280;
+  --primary: #1e6fd9;
+  --primary-dark: #0b3c8c;
+  --accent: #14b8a6;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #dc2626;
+  --info: #0ea5e9;
+
+  --color-slate-50: #f7f9fc;
+  --color-slate-100: #f7f9fc;
+  --color-slate-200: #e3e8ef;
+  --color-slate-300: #cbd3df;
+  --color-slate-400: #6b7280;
+  --color-slate-500: #6b7280;
+  --color-slate-600: #4b5563;
+  --color-slate-700: #374151;
+  --color-slate-800: #1f2937;
+  --color-slate-900: #1f2937;
+  --color-slate-950: #111827;
+
+  --color-cyan-50: #eff6ff;
+  --color-cyan-100: #dbeafe;
+  --color-cyan-200: #bfdbfe;
+  --color-cyan-300: #93c5fd;
+  --color-cyan-400: #60a5fa;
+  --color-cyan-500: #3b82f6;
+  --color-cyan-600: #1e6fd9;
+  --color-cyan-700: #0b3c8c;
+  --color-cyan-800: #093477;
+  --color-cyan-900: #082d66;
+  --color-cyan-950: #061d45;
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #1e6fd9;
+  --color-blue-700: #0b3c8c;
+  --color-blue-800: #093477;
+  --color-blue-900: #082d66;
+  --color-blue-950: #061d45;
+  --color-indigo-50: #eff6ff;
+  --color-indigo-100: #dbeafe;
+  --color-indigo-200: #bfdbfe;
+  --color-indigo-300: #93c5fd;
+  --color-indigo-400: #60a5fa;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-600: #1e6fd9;
+  --color-indigo-700: #0b3c8c;
+  --color-indigo-800: #093477;
+  --color-indigo-900: #082d66;
+  --color-indigo-950: #061d45;
+  --color-purple-50: #eff6ff;
+  --color-purple-100: #dbeafe;
+  --color-purple-200: #bfdbfe;
+  --color-purple-300: #93c5fd;
+  --color-purple-400: #60a5fa;
+  --color-purple-500: #3b82f6;
+  --color-purple-600: #1e6fd9;
+  --color-purple-700: #0b3c8c;
+  --color-purple-800: #093477;
+  --color-purple-900: #082d66;
+  --color-purple-950: #061d45;
+  --color-teal-50: #effcf9;
+  --color-teal-100: #ccfbf1;
+  --color-teal-200: #99f6e4;
+  --color-teal-300: #5eead4;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+  --color-teal-700: #0f766e;
+  --color-teal-800: #115e59;
+  --color-teal-900: #134e4a;
+  --color-teal-950: #042f2e;
+
+  --color-emerald-500: #16a34a;
+  --color-emerald-600: #16a34a;
+  --color-emerald-700: #15803d;
+  --color-green-500: #16a34a;
+  --color-green-600: #16a34a;
+  --color-green-700: #15803d;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
+  --color-orange-500: #f59e0b;
+  --color-orange-600: #d97706;
+  --color-orange-700: #b45309;
+  --color-rose-500: #dc2626;
+  --color-rose-600: #dc2626;
+  --color-rose-700: #b91c1c;
+  --color-red-500: #dc2626;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+  --color-sky-500: #0ea5e9;
+  --color-sky-600: #0284c7;
 }
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
+  min-width: 320px;
+  overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family:
+    var(--font-inter),
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Global interactive cursor ─────────────────────────────────────────── */
+/*
+ * Shared page background. Uses theme tokens so dark mode stays dark instead of
+ * fading to white (the old `via-white` gradient did exactly that).
+ */
+.app-background {
+  background-color: var(--background);
+  background-image: linear-gradient(
+    135deg,
+    var(--background) 0%,
+    var(--surface) 50%,
+    var(--background) 100%
+  );
+}
+
+/* ── Dark mode: badge/chip backgrounds become light → force dark text ── */
+:root[data-theme="dark"] .bg-rose-700.text-white,
+:root[data-theme="dark"] .bg-emerald-700.text-white,
+:root[data-theme="dark"] .bg-green-700.text-white,
+:root[data-theme="dark"] .bg-blue-700.text-white,
+:root[data-theme="dark"] .bg-purple-700.text-white,
+:root[data-theme="dark"] .bg-teal-700.text-white,
+:root[data-theme="dark"] .bg-indigo-700.text-white,
+:root[data-theme="dark"] .bg-cyan-700.text-white,
+:root[data-theme="dark"] .bg-red-700.text-white,
+:root[data-theme="dark"] .bg-amber-500.text-white,
+:root[data-theme="dark"] .bg-gray-500.text-white,
+:root[data-theme="dark"] .bg-slate-500.text-white,
+:root[data-theme="dark"] .bg-yellow-500.text-white,
+:root[data-theme="dark"] .bg-orange-600.text-white {
+  color: #0b1220;
+}
+
+/* ── Themed dropdowns (native select) ── */
+.app-select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+.app-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 35%, transparent);
+}
+.app-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+@media (max-width: 639px) {
+  .app-select {
+    padding: 0.375rem 0.625rem;
+  }
+}
+select.app-select option,
+select option {
+  background-color: var(--surface);
+  color: var(--foreground);
+}
+
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
 button,
 a,
 select,
@@ -23,17 +214,221 @@ label.cursor-pointer {
   cursor: pointer;
 }
 
-/* ── Custom scrollbar ──────────────────────────────────────────────────── */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0f172a;
+  --surface: #1e293b;
+  --surface-raised: #273449;
+  --border: #334155;
+  --foreground: #f1f5f9;
+  --secondary: #94a3b8;
+  --primary: #4c8df6;
+  --primary-dark: #1e6fd9;
+  --accent: #2dd4bf;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #38bdf8;
+
+  --color-slate-50: #1e293b;
+  --color-slate-100: #0f172a;
+  --color-slate-200: #334155;
+  --color-slate-300: #475569;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #cbd5e1;
+  --color-slate-700: #e2e8f0;
+  --color-slate-800: #f1f5f9;
+  --color-slate-900: #f8fafc;
+  --color-slate-950: #ffffff;
+
+  --color-blue-50: #273449;
+  --color-blue-100: #334155;
+  --color-blue-200: #475569;
+  --color-blue-300: #64748b;
+  --color-blue-400: #93c5fd;
+  --color-blue-500: #60a5fa;
+  --color-blue-600: #4c8df6;
+  --color-blue-700: #1e6fd9;
+  --color-blue-800: #1d4ed8;
+  --color-blue-900: #1e40af;
+  --color-blue-950: #172554;
+  --color-cyan-50: #273449;
+  --color-cyan-100: #334155;
+  --color-cyan-200: #475569;
+  --color-cyan-300: #64748b;
+  --color-cyan-400: #93c5fd;
+  --color-cyan-500: #60a5fa;
+  --color-cyan-600: #4c8df6;
+  --color-cyan-700: #1e6fd9;
+  --color-cyan-800: #1d4ed8;
+  --color-cyan-900: #1e40af;
+  --color-cyan-950: #172554;
+  --color-indigo-50: #273449;
+  --color-indigo-100: #334155;
+  --color-indigo-200: #475569;
+  --color-indigo-300: #64748b;
+  --color-indigo-400: #93c5fd;
+  --color-indigo-500: #60a5fa;
+  --color-indigo-600: #4c8df6;
+  --color-indigo-700: #1e6fd9;
+  --color-indigo-800: #1d4ed8;
+  --color-indigo-900: #1e40af;
+  --color-indigo-950: #172554;
+  --color-purple-50: #273449;
+  --color-purple-100: #334155;
+  --color-purple-200: #475569;
+  --color-purple-300: #64748b;
+  --color-purple-400: #93c5fd;
+  --color-purple-500: #60a5fa;
+  --color-purple-600: #4c8df6;
+  --color-purple-700: #1e6fd9;
+  --color-purple-800: #1d4ed8;
+  --color-purple-900: #1e40af;
+  --color-purple-950: #172554;
+  --color-teal-50: #173c43;
+  --color-teal-100: #134e4a;
+  --color-teal-200: #0f766e;
+  --color-teal-300: #2dd4bf;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #2dd4bf;
+  --color-teal-600: #14b8a6;
+  --color-teal-700: #0f766e;
+  --color-teal-800: #115e59;
+  --color-teal-900: #134e4a;
+  --color-teal-950: #042f2e;
+
+  --color-emerald-50: #123626;
+  --color-emerald-100: #14532d;
+  --color-emerald-500: #4ade80;
+  --color-emerald-600: #4ade80;
+  --color-emerald-700: #86efac;
+  --color-green-50: #123626;
+  --color-green-100: #14532d;
+  --color-green-500: #4ade80;
+  --color-green-600: #4ade80;
+  --color-green-700: #86efac;
+  --color-amber-50: #422f13;
+  --color-amber-100: #713f12;
+  --color-amber-500: #fbbf24;
+  --color-amber-600: #fbbf24;
+  --color-amber-700: #fcd34d;
+  --color-orange-50: #422f13;
+  --color-orange-100: #713f12;
+  --color-orange-500: #fbbf24;
+  --color-orange-600: #fbbf24;
+  --color-orange-700: #fcd34d;
+  --color-rose-50: #451a24;
+  --color-rose-100: #7f1d2d;
+  --color-rose-200: #9f3544;
+  --color-rose-500: #f87171;
+  --color-rose-600: #f87171;
+  --color-rose-700: #fca5a5;
+  --color-rose-800: #fecaca;
+  --color-rose-900: #fee2e2;
+  --color-red-50: #451a24;
+  --color-red-100: #7f1d2d;
+  --color-red-200: #9f3544;
+  --color-red-500: #f87171;
+  --color-red-600: #f87171;
+  --color-red-700: #f87171;
+  --color-red-800: #fca5a5;
+  --color-red-900: #fee2e2;
+  --color-sky-500: #38bdf8;
+  --color-sky-600: #38bdf8;
+}
+
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] main {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+:root[data-theme="dark"] .bg-white {
+  background-color: var(--surface) !important;
+}
+
+:root[data-theme="dark"] .bg-white.shadow-lg {
+  background-color: var(--surface-raised) !important;
+}
+
+:root[data-theme="dark"] .bg-white\/70,
+:root[data-theme="dark"] .bg-white\/80,
+:root[data-theme="dark"] .bg-white\/85,
+:root[data-theme="dark"] .bg-white\/90,
+:root[data-theme="dark"] .bg-white\/95 {
+  background-color: rgb(30 41 59 / 92%) !important;
+}
+
+:root[data-theme="dark"] .bg-cyan-600.text-white,
+:root[data-theme="dark"] .bg-blue-600.text-white,
+:root[data-theme="dark"] .bg-indigo-600.text-white,
+:root[data-theme="dark"] .bg-purple-600.text-white,
+:root[data-theme="dark"] button[class*="from-cyan-600"][class*="to-blue-600"] {
+  color: #0b1220;
+}
+
+:root[data-theme="dark"] .bg-red-600.text-white,
+:root[data-theme="dark"] .bg-red-700.text-white,
+:root[data-theme="dark"] .bg-rose-600.text-white,
+:root[data-theme="dark"] .bg-rose-700.text-white {
+  color: #0b1220;
+}
+
 .custom-scroll::-webkit-scrollbar {
   width: 6px;
 }
+
 .custom-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .custom-scroll::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 99px;
 }
+
+:root[data-theme="dark"] .custom-scroll::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+* {
+  scrollbar-color: #94a3b8 transparent;
+}
+
+/* ── Classification & suivi grid: max 3 columns per row ── */
+.classification-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+@media (min-width: 640px) {
+  .classification-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+}
+@media (min-width: 1024px) {
+  .classification-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

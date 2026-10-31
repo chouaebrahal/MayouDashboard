@@ -1,6 +1,9 @@
 /* Firebase Cloud Messaging service worker (background / closed tab). */
 // Register click handling before Firebase Messaging, which may add its own handler.
 self.addEventListener("notificationclick", (event) => {
+  // Handle the navigation here and stop the Firebase SDK's own click handler
+  // from opening/focusing a second time for the same notification.
+  event.stopImmediatePropagation();
   event.notification.close();
 
   const notificationData = event.notification.data || {};
@@ -66,14 +69,19 @@ try {
 if (messaging) {
   messaging.onBackgroundMessage(async (payload) => {
     const data = payload.data || {};
+    const title = payload.notification?.title || data.title || "MayouDashboard";
+    const body = payload.notification?.body || data.body || "";
+    const link = data.link || "/dashboard";
+    const icon = payload.notification?.icon || "/icon-192.png";
+
     console.info("[FCM-SW] Background delivery received", {
       hasNotification: Boolean(payload.notification),
       dataKeys: Object.keys(data),
       diagnosticId: data.diagnosticId || null,
     });
 
-    // Make background delivery observable by the open settings page too.
-    // This only reports delivery metadata; it never forwards the FCM token.
+    // Make background delivery observable by open pages too (in-app toast,
+    // badges, diagnostics). This never forwards the FCM token.
     const clients = await self.clients.matchAll({
       type: "window",
       includeUncontrolled: true,
@@ -81,26 +89,22 @@ if (messaging) {
     for (const client of clients) {
       client.postMessage({
         type: "MAYOU_FCM_BACKGROUND_RECEIVED",
-        data: { diagnosticId: data.diagnosticId || null },
+        data: { ...data, diagnosticId: data.diagnosticId || null },
+        notification: { title, body, icon },
+        link,
       });
     }
 
-    // FCM automatically displays notification payloads in the background.
-    // Only data-only messages need a notification created here.
+    // The Firebase SDK already displayed payload.notification before calling
+    // this handler. Only data-only messages need a notification created here.
     if (payload.notification) return;
 
-    const title = payload.notification?.title || data.title || "MayouDashboard";
-    const body = payload.notification?.body || data.body || "";
-    const link = data.link || "/dashboard";
-
-    const options = {
+    return self.registration.showNotification(title, {
       body,
-      icon: payload.notification?.icon || "/icon-192.png",
+      icon,
       badge: "/icon-192.png",
       data: { ...data, link },
       tag: data.tag || "mayoudashboard",
-    };
-
-    return self.registration.showNotification(title, options);
+    });
   });
 }

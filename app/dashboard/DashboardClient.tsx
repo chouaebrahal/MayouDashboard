@@ -171,14 +171,14 @@ export default function DashboardClient({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-100/40">
-      <div className="p-8">
+    <div className="min-h-screen app-background">
+      <div className="px-3 py-4 sm:px-5 sm:py-6 lg:p-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Sparkles size={20} className="text-amber-500" />
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">
                 Tableau de bord
               </h1>
             </div>
@@ -230,7 +230,7 @@ export default function DashboardClient({
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Patients"
             value={totalPatients}
@@ -325,7 +325,7 @@ export default function DashboardClient({
         )}
 
         {/* Second Row Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-slate-500 font-medium">Interventions</p>
@@ -398,7 +398,7 @@ export default function DashboardClient({
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Distribution des statuts dossier */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-semibold text-slate-800 flex items-center gap-2">
                 <FileText size={18} className="text-cyan-600" />
@@ -417,7 +417,7 @@ export default function DashboardClient({
           </div>
 
           {/* Distribution des types de cas */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-semibold text-slate-800 flex items-center gap-2">
                 <Activity size={18} className="text-purple-600" />
@@ -467,7 +467,7 @@ export default function DashboardClient({
                   <span className="font-semibold text-slate-700">{patients.filter(p => p.type_de_cas === "ATL à faire").length}</span>
                 </div>
                 <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-orange-500 rounded-full" style={{ width: `${totalPatients > 0 ? (patients.filter(p => p.type_de_cas === "ATL à faire").length / totalPatients) * 100 : 0}%` }} />
+                  <div className="h-full bg-red-600 rounded-full" style={{ width: `${totalPatients > 0 ? (patients.filter(p => p.type_de_cas === "ATL à faire").length / totalPatients) * 100 : 0}%` }} />
                 </div>
               </div>
             </div>

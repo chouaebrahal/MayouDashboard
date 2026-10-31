@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react"
 import { useUser } from "@/app/components/UserProvider"
 import { supabase } from "@/lib/supabaseClient"
-import { refreshForToken, requestForToken } from "@/lib/firebaseClient"
+import { refreshForToken, requestForToken, registerMessagingServiceWorker, resetPushRegistration } from "@/lib/firebaseClient"
 import { registerPushDevice } from "@/lib/fcmTokens"
 import {
   User,
@@ -14,14 +14,9 @@ import {
   Eye,
   EyeOff,
   Save,
-  Shield,
   Bell,
   BellRing,
   Send,
-  Moon,
-  Sun,
-  Globe,
-  Languages,
   Printer,
   Download,
   AlertCircle,
@@ -32,10 +27,32 @@ import {
   Smartphone,
   ChevronRight,
   LogOut,
-  X
+  X,
+  RefreshCw
 } from "lucide-react"
 
 const FCM_RECEIPT_TIMEOUT_MS = 30_000
+
+function pushErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/registration failed - permission denied/i.test(message)) {
+    return "Le navigateur a refusé l'abonnement Push. Chrome bloque Push en navigation privée : ouvrez MayouDashboard dans une fenêtre normale, autorisez les notifications du site, puis réessayez."
+  }
+  if (/operation has been aborted|abort/i.test(message)) {
+    return "Le navigateur a interrompu l'enregistrement du service worker (page rechargée pendant l'opération, ou autre onglet en train de s'enregistrer). Réessayez : l'application réutilise maintenant l'enregistrement existant. Si l'erreur persiste, ouvrez DevTools → Application → Service Workers, désenregistrez le worker puis rechargez la page."
+  }
+  if (
+    /unregistered|not registered|registration-token-not-registered|invalid-registration-token|device unregistered/i.test(
+      message
+    )
+  ) {
+    return "FCM refuse ce token : l'appareil n'est plus enregistré (ancien abonnement Push ou token révoqué). Cliquez sur « Réinitialiser les notifications » puis refaites le test. Si un token tout neuf est encore refusé immédiatement, vérifiez que NEXT_PUBLIC_FIREBASE_VAPID_KEY correspond au certificat Web Push du projet mayoudashboard (Firebase Console → Cloud Messaging → Certificats Web Push)."
+  }
+  if (/mismatched-credential|sender id mismatch|third-party-auth|app id mismatch/i.test(message)) {
+    return "Ce token appartient à un autre projet Firebase que celui utilisé par le serveur. Vérifiez que NEXT_PUBLIC_FIREBASE_PROJECT_ID / NEXT_PUBLIC_FIREBASE_APP_ID / NEXT_PUBLIC_FIREBASE_VAPID_KEY et FIREBASE_PROJECT_ID viennent tous du projet mayoudashboard, puis réinitialisez les notifications."
+  }
+  return message || "Erreur lors de l'envoi du test"
+}
 
 export default function SettingsClient() {
   const { user, logout } = useUser()
@@ -67,6 +84,7 @@ export default function SettingsClient() {
   })
 
   const [pushToken, setPushToken] = useState<string | null>(null)
+  const [pushDeviceActive, setPushDeviceActive] = useState(false)
   const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">("default")
   const [pushLoading, setPushLoading] = useState(false)
   const [pushMessage, setPushMessage] = useState<string | null>(null)
@@ -104,16 +122,6 @@ export default function SettingsClient() {
     }
     setPushPermission(Notification.permission)
     void refreshServiceWorkerStatus()
-
-    // If permission was already granted, retrieve the token so the
-    // diagnostic panel can show it without clicking "Activer".
-    if (Notification.permission === "granted") {
-      void requestForToken().then((token) => {
-        if (token) {
-          setPushToken(token)
-        }
-      })
-    }
   }, [])
 
   const handleEnablePush = async () => {
@@ -125,20 +133,67 @@ export default function SettingsClient() {
       const token = await requestForToken()
       if (!token) {
         setPushPermission(typeof Notification !== "undefined" ? Notification.permission : "unsupported")
+        setPushDeviceActive(false)
         setPushError(
-          "Impossible d'activer les notifications. Vérifiez que vous avez autorisé les notifications (et sur iOS : ajoutez l'application à l'écran d'accueil)."
+          Notification.permission === "denied"
+            ? "Les notifications sont bloquées pour ce site. Autorisez-les dans les paramètres du navigateur, puis rechargez la page."
+            : "Aucun token Push obtenu. Vérifiez les autorisations du navigateur (sur iOS, ajoutez d'abord l'application à l'écran d'accueil)."
         )
         return
       }
       const saved = await registerPushDevice(user.id, user.role, token)
       setPushToken(token)
       setPushPermission("granted")
+      setPushDeviceActive(saved.subscribed)
       void refreshServiceWorkerStatus()
       setPushMessage(
         saved.subscribed
           ? "Notifications activées sur cet appareil."
           : "Token obtenu, mais l'abonnement au canal de notifications a échoué. Vérifiez la configuration Firebase."
       )
+      if (!saved.subscribed) {
+        setPushError(saved.error || "L'abonnement de cet appareil au canal de notifications a échoué.")
+      }
+    } catch (error) {
+      setPushError(
+        pushErrorMessage(error)
+      )
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  const handleResetPush = async () => {
+    setPushLoading(true)
+    setPushError(null)
+    setPushMessage(null)
+    setLastTestResult(null)
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+        setPushError(
+          "Les notifications sont bloquées pour ce site. Autorisez-les dans les paramètres du navigateur, puis rechargez la page."
+        )
+        return
+      }
+      const token = await resetPushRegistration()
+      if (!token) {
+        setPushError(
+          "Impossible de recréer un abonnement Push. Vérifiez que les notifications sont autorisées pour ce site."
+        )
+        return
+      }
+      setPushToken(token)
+      setPushPermission("granted")
+      if (user) {
+        const saved = await registerPushDevice(user.id, user.role, token)
+        setPushDeviceActive(saved.subscribed)
+      }
+      void refreshServiceWorkerStatus()
+      setPushMessage(
+        "Notifications réinitialisées : nouvel abonnement Push et nouveau token FCM créés. Relancez le test."
+      )
+    } catch (error) {
+      setPushError(pushErrorMessage(error))
     } finally {
       setPushLoading(false)
     }
@@ -176,6 +231,13 @@ export default function SettingsClient() {
         return
       }
       setPushToken(token)
+      setPushPermission("granted")
+      // A test should also make sure the device is subscribed to the topic
+      // used by the cron reminders, not just able to receive a direct send.
+      if (user) {
+        const saved = await registerPushDevice(user.id, user.role, token)
+        setPushDeviceActive(saved.subscribed)
+      }
       const sendTest = (targetToken: string) => fetch("/api/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -203,13 +265,12 @@ export default function SettingsClient() {
         json = { error: responseText || "Réponse serveur illisible" }
       }
 
-      if (
-        res.status === 410 &&
-        (json.code === "messaging/registration-token-not-registered" ||
-          json.code === "messaging/invalid-registration-token")
-      ) {
+      // 410 is only returned for a revoked/unregistered token: rotate it once
+      // and retry before failing the test.
+      if (res.status === 410) {
         const refreshedToken = await refreshForToken()
         if (!refreshedToken) {
+          setPushDeviceActive(false)
           throw new Error("Le token FCM était expiré et n'a pas pu être renouvelé. Réactivez les notifications sur cet appareil.")
         }
         token = refreshedToken
@@ -235,13 +296,6 @@ export default function SettingsClient() {
       setLastTestResult(
         `HTTP ${res.status} · token ${token.slice(0, 12)}… · ${result}`
       )
-      console.info("[FCM] Button test send result", {
-        diagnosticId,
-        httpStatus: res.status,
-        tokenPrefix: token.slice(0, 12),
-        messageId: json.response || null,
-        projectId: json.projectId || null,
-      })
       if (!res.ok || !json.success) {
         throw new Error(json.error || `L'envoi a échoué (HTTP ${res.status})`)
       }
@@ -255,11 +309,20 @@ export default function SettingsClient() {
         }),
       ])
       let refreshedAndRetried = false
+      let retrySendFailed = false
 
       // FCM can accept a recently rotated token but fail to deliver to its
       // browser subscription. If there's no receipt, rotate once and retry.
       if (received === null) {
-        const refreshedToken = await refreshForToken()
+        let refreshedToken: string | null = null
+        try {
+          refreshedToken = await refreshForToken()
+        } catch (error) {
+          console.warn("[FCM] Token refresh failed", error)
+          retrySendFailed = true
+          setPushError(pushErrorMessage(error))
+        }
+
         if (refreshedToken && refreshedToken !== token) {
           refreshedAndRetried = true
           token = refreshedToken
@@ -285,15 +348,29 @@ export default function SettingsClient() {
               }),
             ])
           } else {
+            retrySendFailed = true
+            setPushDeviceActive(false)
             setPushError(
-              json.error || `Le nouvel envoi a échoué (HTTP ${retryResponse.status})`,
+              pushErrorMessage(
+                new Error(
+                  json.error ||
+                    `Le nouvel envoi a échoué (HTTP ${retryResponse.status})`,
+                ),
+              ),
             )
           }
+        } else if (!retrySendFailed) {
+          // refreshForToken() guarantees a different token; if that still did
+          // not happen the local Push state is corrupted.
+          retrySendFailed = true
+          setPushError(
+            "Impossible de créer un nouveau token FCM : l'abonnement Push de ce navigateur est bloqué. Cliquez sur « Réinitialiser les notifications », puis réessayez.",
+          )
         }
       }
 
       setLastTestResult((current) =>
-        `${current} · ${received === "foreground" ? "reçu par le listener de la page" : received === "service-worker" ? "reçu en arrière-plan par le service worker" : `aucun accusé navigateur sous ${FCM_RECEIPT_TIMEOUT_MS / 1000} s`}${refreshedAndRetried ? " · token renouvelé et nouvel essai effectué" : ""}`
+        `${current} · ${received === "foreground" ? "reçu par le listener de la page" : received === "service-worker" ? "reçu via le service worker (notification système + toast)" : `aucun accusé navigateur sous ${FCM_RECEIPT_TIMEOUT_MS / 1000} s`}${refreshedAndRetried ? " · token renouvelé et nouvel essai effectué" : ""}`
       )
       if (received === null) {
         const registration = await navigator.serviceWorker.getRegistration("/")
@@ -313,15 +390,17 @@ export default function SettingsClient() {
           notificationPermission: Notification.permission,
         })
       }
-      setPushMessage(
-        received === "foreground"
-          ? "Firebase a accepté l'envoi et le listener FCM de cette page l'a reçu."
-          : received === "service-worker"
-            ? "Firebase a livré le test au service worker en arrière-plan. Cette page n'était pas traitée comme active par FCM au moment de la réception."
-            : `Firebase a accepté l'envoi, mais ni la page ni le service worker n'ont confirmé sa réception sous ${FCM_RECEIPT_TIMEOUT_MS / 1000} s. Vérifiez les erreurs de console et l'état de l'abonnement/push dans le navigateur.`
-      )
+      if (!retrySendFailed) {
+        setPushMessage(
+          received === "foreground"
+            ? "Test réussi : message reçu par la page (toast) et notification système affichée."
+            : received === "service-worker"
+              ? "Test réussi : le navigateur a traité la page comme étant en arrière-plan, le service worker a reçu le message, affiché la notification système et transmis le toast à la page."
+              : `Firebase a accepté l'envoi, mais ni la page ni le service worker n'ont confirmé sa réception sous ${FCM_RECEIPT_TIMEOUT_MS / 1000} s. Cliquez sur « Réinitialiser les notifications » puis réessayez ; si le problème persiste, vérifiez les erreurs de console et l'état de l'abonnement/push dans le navigateur.`
+        )
+      }
     } catch (e) {
-      setPushError(e instanceof Error ? e.message : "Erreur lors de l'envoi du test")
+      setPushError(pushErrorMessage(e))
     } finally {
       removeDeliveryListener()
       if (deliveryTimer !== undefined) window.clearTimeout(deliveryTimer)
@@ -337,19 +416,88 @@ export default function SettingsClient() {
         setPushError("Ce navigateur ne supporte pas les notifications.")
         return
       }
-      if (Notification.permission !== "granted") {
-        setPushError("Autorisez d'abord les notifications dans le navigateur.")
+      let permission = Notification.permission
+      if (permission === "default") {
+        permission = await Notification.requestPermission()
+      }
+      if (permission !== "granted") {
+        setPushError(
+          permission === "denied"
+            ? "Les notifications sont bloquées pour ce site. Autorisez-les dans les paramètres du navigateur, puis rechargez la page."
+            : "Autorisez d'abord les notifications dans le navigateur."
+        )
         return
       }
-      const registration = await navigator.serviceWorker.ready
-      await registration.showNotification("Test local — MayouDashboard", {
-        body: "Si vous voyez cette notification, le navigateur et le système les affichent bien.",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-      })
-      setPushMessage(
-        "Notification locale affichée. Si elle n'apparaît pas, vérifiez les réglages de notifications de Windows/macOS/Android (mode Ne pas déranger, notifications Chrome, etc.)."
-      )
+      // Never let this button hang silently: if the service worker registration
+      // is slow or stuck, fall through to a page-level notification.
+      const registration = await Promise.race([
+        registerMessagingServiceWorker().catch((regError) => {
+          console.warn("[FCM] service worker registration failed", regError)
+          return null
+        }),
+        new Promise<null>((resolve) => {
+          setTimeout(() => resolve(null), 8000)
+        }),
+      ])
+
+      const title = "Test local — MayouDashboard"
+      const body =
+        "Si vous voyez cette notification, le navigateur et le système les affichent bien."
+      const tag = `mayou-local-${Date.now()}`
+      let acceptedByWorker = false
+
+      try {
+        if (registration) {
+          await registration.showNotification(title, {
+            body,
+            icon: "/icon-192.png",
+            badge: "/icon-192.png",
+            tag,
+            data: { link: "/dashboard" },
+          })
+          acceptedByWorker = true
+        }
+      } catch (swError) {
+        console.warn("[FCM] service worker showNotification failed", swError)
+      }
+
+      // showNotification() resolves even when Windows/macOS silently suppress
+      // the popup. getNotifications() at least proves the browser registered
+      // it in the notification centre.
+      let registeredInCentre = false
+      if (acceptedByWorker && registration) {
+        try {
+          registeredInCentre = (await registration.getNotifications({ tag })).length > 0
+        } catch {
+          /* not supported everywhere */
+        }
+        setPushMessage(
+          registeredInCentre
+            ? "Notification locale enregistrée par le navigateur (visible dans le centre de notifications). Si aucun popup ne s'affiche, Windows/macOS/Android le masque : activez les notifications pour Google Chrome dans les réglages système et désactivez « Ne pas déranger »."
+            : "Le navigateur a accepté la notification locale. Si aucun popup ne s'affiche, c'est le système qui la masque : vérifiez les réglages de notifications de Windows/macOS/Android (Chrome autorisé, mode Ne pas déranger désactivé)."
+        )
+      } else {
+        // Some desktops refuse service-worker notifications but still allow a
+        // page notification. This tells us which path is blocked.
+        let pageNotificationShown = false
+        try {
+          new Notification(title, { body, icon: "/icon-192.png", tag })
+          pageNotificationShown = true
+        } catch (pageError) {
+          console.warn("[FCM] page Notification() failed", pageError)
+        }
+        if (pageNotificationShown) {
+          setPushMessage(
+            registration
+              ? "Notification de page affichée (le service worker a été refusé). Si elle n'apparaît pas, le système bloque les notifications de Chrome."
+              : "Le service worker de notifications n'a pas répondu ; une notification de page a été affichée. Si elle n'apparaît pas, le système bloque les notifications de Chrome."
+          )
+        } else {
+          setPushError(
+            "Le navigateur a refusé d'afficher la notification locale. Vérifiez que les notifications sont autorisées pour ce site et que Windows/macOS autorise les notifications de Google Chrome."
+          )
+        }
+      }
       void refreshServiceWorkerStatus()
     } catch (e) {
       setPushError(
@@ -474,8 +622,8 @@ export default function SettingsClient() {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-blue-100/40">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen app-background">
+      <div className="mx-auto max-w-5xl px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8">
         
         {/* Header */}
         <div className="mb-8">
@@ -729,8 +877,10 @@ export default function SettingsClient() {
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         Statut :{" "}
-                        {pushPermission === "granted"
+                        {pushDeviceActive
                           ? "activées sur cet appareil"
+                          : pushPermission === "granted"
+                            ? "autorisation accordée, activation à terminer"
                           : pushPermission === "denied"
                             ? "refusées dans le navigateur"
                             : pushPermission === "unsupported"
@@ -740,13 +890,14 @@ export default function SettingsClient() {
                     </div>
                     <span
                       className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                        pushPermission === "granted" ? "bg-emerald-500" : "bg-slate-300"
+                        pushDeviceActive ? "bg-emerald-500" : "bg-slate-300"
                       }`}
                     />
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
+                      type="button"
                       onClick={handleEnablePush}
                       disabled={pushLoading || pushPermission === "unsupported"}
                       className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-cyan-700 disabled:opacity-50"
@@ -755,6 +906,7 @@ export default function SettingsClient() {
                       Activer cet appareil
                     </button>
                     <button
+                      type="button"
                       onClick={handleTestPush}
                       disabled={pushLoading || pushPermission === "unsupported"}
                       className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
@@ -763,12 +915,22 @@ export default function SettingsClient() {
                       Envoyer un test
                     </button>
                     <button
+                      type="button"
                       onClick={handleLocalNotification}
-                      disabled={pushLoading || pushPermission === "unsupported"}
+                      disabled={pushPermission === "unsupported"}
                       className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                     >
                       <Bell size={15} />
                       Notification locale
+                    </button>
+                    <button
+                      onClick={handleResetPush}
+                      disabled={pushLoading || pushPermission === "unsupported"}
+                      title="Recrée l'abonnement Push du navigateur et le token FCM quand un appareil est resté « unregistered »"
+                      className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      <RefreshCw size={15} />
+                      Réinitialiser les notifications
                     </button>
                   </div>
 

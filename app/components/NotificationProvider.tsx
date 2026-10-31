@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { requestForToken, onForegroundMessage } from "@/lib/firebaseClient"
+import { requestForToken, onForegroundMessage, registerMessagingServiceWorker } from "@/lib/firebaseClient"
 import { registerPushDevice } from "@/lib/fcmTokens"
 import { useUser } from "./UserProvider"
 import { Bell, BellRing, Loader2, X } from "lucide-react"
@@ -47,6 +47,16 @@ export default function NotificationProvider({ children }: { children: React.Rea
         } else if (typeof Notification !== "undefined") {
           setPermission(Notification.permission)
         }
+      } catch (error) {
+        console.error("Activation des notifications impossible :", error)
+        if (!silent) {
+          setNotification({
+            title: "Activation impossible",
+            body: error instanceof Error ? error.message : "Vérifiez les autorisations du navigateur et réessayez.",
+          })
+          if (toastTimer.current) window.clearTimeout(toastTimer.current)
+          toastTimer.current = window.setTimeout(() => setNotification(null), 8000)
+        }
       } finally {
         if (!silent) setEnabling(false)
       }
@@ -54,8 +64,9 @@ export default function NotificationProvider({ children }: { children: React.Rea
     [user, saveToken]
   )
 
-  // Reflect the current browser permission and re-register silently when it
-  // was already granted (token refresh / device change).
+  // Reflect permission only. Token creation stays deferred until the user
+  // explicitly enables this device; only the service worker is warmed up
+  // below (registration does not require a notification permission prompt).
   useEffect(() => {
     if (typeof window === "undefined") return
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
@@ -63,26 +74,46 @@ export default function NotificationProvider({ children }: { children: React.Rea
       return
     }
     setPermission(Notification.permission)
-    if (user && Notification.permission === "granted") {
-      void enableNotifications(true)
-    }
-  }, [user, enableNotifications])
+  }, [])
+
+  // Warm up the messaging worker as soon as the dashboard mounts. Registering
+  // during a click races with the browser's own update check (and with other
+  // tabs), which is what produces "Operation has been aborted". Doing it here
+  // means the test buttons reuse an already activated registration.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return
+    void registerMessagingServiceWorker().catch((error) => {
+      console.warn(
+        "[FCM] Service worker not ready yet, will retry on activation:",
+        error
+      )
+    })
+  }, [])
 
   useEffect(() => {
     const handleServiceWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type !== "MAYOU_FCM_BACKGROUND_RECEIVED") return
 
-      console.info("[FCM] Background message received by service worker", {
-        diagnosticId: event.data.data?.diagnosticId || null,
-      })
+      const data = event.data.data || {}
+      const title = event.data.notification?.title || data.title || "MayouDashboard"
+      const body = event.data.notification?.body || data.body || ""
+      const link = event.data.link || data.link || undefined
+
       window.dispatchEvent(
         new CustomEvent("mayou:fcm-message", {
           detail: {
-            data: event.data.data || {},
+            data,
             delivery: "service-worker",
           },
         })
       )
+
+      // FCM only chooses the service-worker path when it did not see a visible
+      // client, but the page can still be on screen (covered window, race,
+      // or a background tab). Surface the same in-app toast either way.
+      setNotification({ title, body, link })
+      if (toastTimer.current) window.clearTimeout(toastTimer.current)
+      toastTimer.current = window.setTimeout(() => setNotification(null), 8000)
     }
 
     navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage)
@@ -93,13 +124,6 @@ export default function NotificationProvider({ children }: { children: React.Rea
       const title = payload.notification?.title || payload.data?.title || "MayouDashboard"
       const body = payload.notification?.body || payload.data?.tag || payload.data?.body || ""
       const link = payload.data?.link
-      console.info("[FCM] Foreground message received", {
-        title,
-        body,
-        hasNotification: Boolean(payload.notification),
-        hasData: Boolean(payload.data),
-        dataKeys: payload.data ? Object.keys(payload.data) : [],
-      })
       window.dispatchEvent(
         new CustomEvent("mayou:fcm-message", {
           detail: { data: payload.data, delivery: "foreground" },
@@ -141,7 +165,6 @@ export default function NotificationProvider({ children }: { children: React.Rea
           )
         } else {
           unsubscribe = unsub
-          console.info("[FCM] Foreground message listener ready")
         }
       })
       .catch((error) => console.warn("Écoute des notifications impossible :", error))
@@ -154,7 +177,8 @@ export default function NotificationProvider({ children }: { children: React.Rea
     }
   }, [])
 
-  const showEnableButton = permission === "default" && !token
+  const showEnableButton =
+    (permission === "default" || permission === "granted") && !token
 
   return (
     <>
