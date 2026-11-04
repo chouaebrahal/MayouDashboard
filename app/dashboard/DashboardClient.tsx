@@ -275,7 +275,7 @@ export default function DashboardClient({
                       Dossiers en attente depuis plus de 10 jours
                     </h3>
                     <p className="text-rose-700 mt-1">
-                      {dossiersEnAttentePlus10Jours.length} patient(s) avec statut "Statut inconnu" ou "Dossier en préparation" sans dépôt de dossier plus de 10 jours après l'intervention. À relancer !
+                      {dossiersEnAttentePlus10Jours.length} patient(s) avec type de cas « ATL à faire » et statut « Statut inconnu » ou « Dossier en préparation » sans dépôt de dossier plus de 10 jours après l'intervention. À relancer !
                     </p>
                   </div>
                 </div>
@@ -307,7 +307,7 @@ export default function DashboardClient({
                       Dossiers critiques : plus de 15 jours
                     </h3>
                     <p className="text-red-700 mt-1">
-                      {dossiersEnAttentePlus15Jours.length} patient(s) parmi les dossiers en attente dépassent 15 jours après l'intervention, sans dépôt de dossier. Relance urgente !
+                      {dossiersEnAttentePlus15Jours.length} patient(s) avec type de cas « ATL à faire » parmi les dossiers en attente dépassent 15 jours après l'intervention, sans dépôt de dossier. Relance urgente !
                     </p>
                   </div>
                 </div>

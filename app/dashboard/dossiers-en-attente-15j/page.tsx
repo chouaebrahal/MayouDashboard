@@ -22,7 +22,7 @@ export default async function PendingDossiers15Page() {
     <PatientsClient
       initialPatients={pendingPatients}
       pageTitle="Dossiers en attente > 15 jours"
-      pageDescription="Patients avec statut 'Statut inconnu' ou 'Dossier en préparation' plus de 15 jours après leur intervention, sans dépôt de dossier. Priorité de relance."
+      pageDescription="Patients avec type de cas « ATL à faire » et statut « Statut inconnu » ou « Dossier en préparation » plus de 15 jours après leur intervention, sans dépôt de dossier. Priorité de relance."
     />
   )
 }
