@@ -300,7 +300,6 @@ label.cursor-pointer {
   --color-purple-900: #1e40af;
   --color-purple-950: #172554;
   --color-teal-50: #173c43;
-  --color-teal-100: #134e4a;
   --color-teal-200: #0f766e;
   --color-teal-300: #2dd4bf;
   --color-teal-400: #2dd4bf;
@@ -313,6 +312,12 @@ label.cursor-pointer {
 
   --color-emerald-50: #123626;
   --color-emerald-100: #14532d;
+  --color-violet-50: #2e1a47;
+  --color-violet-100: #3b2560;
+  --color-violet-200: #4c3575;
+  --color-violet-400: #a78bfa;
+  --color-violet-500: #8b5cf6;
+  --color-violet-700: #c4b5fd;
   --color-emerald-500: #4ade80;
   --color-emerald-600: #4ade80;
   --color-emerald-700: #86efac;

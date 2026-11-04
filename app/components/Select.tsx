@@ -42,6 +42,7 @@ export default function Select({
   const opts = normalize(options)
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState<number>(-1)
+  const [dropUp, setDropUp] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
@@ -72,6 +73,14 @@ export default function Select({
     if (open) {
       const idx = opts.findIndex((o) => o.value === value)
       setHighlight(idx >= 0 ? idx : 0)
+      // Decide whether to open upward (drop-up) to avoid overflowing
+      // the viewport / making the container scroll.
+      if (rootRef.current) {
+        const rect = rootRef.current.getBoundingClientRect()
+        const panelHeight = Math.min(opts.length * 36 + 8, 240)
+        const spaceBelow = window.innerHeight - rect.bottom
+        setDropUp(spaceBelow < panelHeight && rect.top > panelHeight)
+      }
     }
   }, [open, opts, value])
 
@@ -129,7 +138,10 @@ export default function Select({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border shadow-xl" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }}>
+        <div
+          className={`absolute left-0 right-0 z-50 overflow-hidden rounded-xl border shadow-xl ${dropUp ? "bottom-full mb-1" : "top-full mt-1"}`}
+          style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }}
+        >
           <ul
             ref={listRef}
             role="listbox"
