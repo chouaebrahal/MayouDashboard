@@ -22,6 +22,7 @@ export default function NotificationProvider({ children }: { children: React.Rea
     if (typeof window === "undefined") return false
     try { return window.localStorage.getItem("mayou-push-activated") === "1" } catch { return false }
   })
+  const [checking, setChecking] = useState(false)
   const toastTimer = useRef<number | null>(null)
 
   const saveToken = useCallback(
@@ -79,15 +80,39 @@ export default function NotificationProvider({ children }: { children: React.Rea
       setPermission("unsupported")
       return
     }
-    setPermission(Notification.permission)
-    try {
-      setActivated(window.localStorage.getItem("mayou-push-activated") === "1")
-    } catch { /* ignore */ }
-    if (Notification.permission === "denied") {
+    const p = Notification.permission
+    setPermission(p)
+    if (p === "denied") {
       setActivated(false)
       try { window.localStorage.removeItem("mayou-push-activated") } catch { /* ignore */ }
+      return
     }
-  }, [])
+    // Already activated previously: nothing to do.
+    if (window.localStorage.getItem("mayou-push-activated") === "1") {
+      setActivated(true)
+      return
+    }
+    // Permission granted but no local flag (e.g. activated before this flag
+    // existed, or on a new device): silently obtain the token to confirm.
+    if (p === "granted") {
+      setChecking(true)
+      void (async () => {
+        try {
+          const fcmToken = await requestForToken()
+          if (fcmToken) {
+            setToken(fcmToken)
+            setActivated(true)
+            try { window.localStorage.setItem("mayou-push-activated", "1") } catch { /* ignore */ }
+            await saveToken(fcmToken)
+          }
+        } catch (e) {
+          console.warn("Auto-detection des notifications impossible :", e)
+        } finally {
+          setChecking(false)
+        }
+      })()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Warm up the messaging worker as soon as the dashboard mounts. Registering
   // during a click races with the browser's own update check (and with other
@@ -191,8 +216,9 @@ export default function NotificationProvider({ children }: { children: React.Rea
   }, [])
 
   const showEnableButton =
+    !checking &&
     !activated &&
-    (permission === "default" || (permission === "granted" && !token))
+    (permission === "default" || permission === "granted")
 
   return (
     <>
