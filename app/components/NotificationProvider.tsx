@@ -18,6 +18,10 @@ export default function NotificationProvider({ children }: { children: React.Rea
   const [token, setToken] = useState<string | null>(null)
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default")
   const [enabling, setEnabling] = useState(false)
+  const [activated, setActivated] = useState(() => {
+    if (typeof window === "undefined") return false
+    try { return window.localStorage.getItem("mayou-push-activated") === "1" } catch { return false }
+  })
   const toastTimer = useRef<number | null>(null)
 
   const saveToken = useCallback(
@@ -43,6 +47,8 @@ export default function NotificationProvider({ children }: { children: React.Rea
         if (fcmToken) {
           setToken(fcmToken)
           setPermission("granted")
+          setActivated(true)
+          try { window.localStorage.setItem("mayou-push-activated", "1") } catch { /* ignore */ }
           await saveToken(fcmToken)
         } else if (typeof Notification !== "undefined") {
           setPermission(Notification.permission)
@@ -74,6 +80,13 @@ export default function NotificationProvider({ children }: { children: React.Rea
       return
     }
     setPermission(Notification.permission)
+    try {
+      setActivated(window.localStorage.getItem("mayou-push-activated") === "1")
+    } catch { /* ignore */ }
+    if (Notification.permission === "denied") {
+      setActivated(false)
+      try { window.localStorage.removeItem("mayou-push-activated") } catch { /* ignore */ }
+    }
   }, [])
 
   // Warm up the messaging worker as soon as the dashboard mounts. Registering
@@ -178,7 +191,8 @@ export default function NotificationProvider({ children }: { children: React.Rea
   }, [])
 
   const showEnableButton =
-    (permission === "default" || permission === "granted") && !token
+    !activated &&
+    (permission === "default" || (permission === "granted" && !token))
 
   return (
     <>
